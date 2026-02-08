@@ -1,6 +1,7 @@
 import { act, cleanup } from '@testing-library/react'
 import { mockAnimationsApi, mockResizeObserver } from 'jsdom-testing-mocks'
 import '@testing-library/jest-dom/vitest'
+import 'fake-indexeddb/auto'
 
 mockResizeObserver()
 
@@ -155,4 +156,21 @@ beforeEach(() => {
     writable: true,
     configurable: true,
   })
+
+  // Mock window.crypto for Web Crypto API
+  if (!globalThis.crypto || !globalThis.crypto.subtle) {
+    const nodeCrypto = require('crypto')
+    Object.defineProperty(globalThis, 'crypto', {
+      value: {
+        getRandomValues: (arr: any) => {
+          const bytes = nodeCrypto.randomBytes(arr.length)
+          arr.set(bytes)
+          return arr
+        },
+        subtle: nodeCrypto.webcrypto.subtle,
+      },
+      writable: true,
+      configurable: true,
+    })
+  }
 })

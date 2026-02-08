@@ -62,6 +62,16 @@
 
 Dify is an open-source platform for developing LLM applications. Its intuitive interface combines agentic AI workflows, RAG pipelines, agent capabilities, model management, observability features, and more—allowing you to quickly move from prototype to production.
 
+## 📚 Documentation Index
+
+**Looking for specific documentation?** Check out our comprehensive [Documentation Index](DOCS_INDEX.md) for quick navigation to:
+- 🚀 Quick Start Guides
+- 📋 Project Requirements & Specifications
+- 🎨 UI/UX Design Guidelines
+- 🖥️ Desktop App Development
+- 🏗️ Build & Deployment Guides
+- 💡 Feature Implementation Guides
+
 ## Quick start
 
 > Before installing Dify, make sure your machine meets the following minimum system requirements:

@@ -2,170 +2,183 @@
 
 ## 简介
 
-数据脱敏功能使用户能够在将文件上传到云端 Dify 平台进行 AI 处理之前保护敏感信息。用户可以在本地桌面客户端对敏感数据进行脱敏处理，将脱敏后的文件存储在安全的沙箱环境中，上传到云端进行处理，并在返回结果时自动恢复原始数据。这确保了端到端的数据隐私，同时充分利用云端 AI 能力。
+数据脱敏功能是在基于 Dify 平台的桌面应用中新增的本地数据保护能力。用户可以在本地桌面客户端对敏感数据进行脱敏处理，将脱敏后的文件存储在本地沙箱环境中，然后上传到 Dify 云端后端进行 AI 处理，并在返回结果时自动恢复原始数据。这确保了端到端的数据隐私，同时充分利用 Dify 云端 AI 能力。
+
+## 项目架构说明
+
+本项目基于 Dify 开源平台进行定制开发：
+
+- **服务器端**: 使用 Dify 后端（Python Flask + DDD 架构 + Celery + Redis）
+- **桌面客户端**: 使用 Dify 前端（Next.js + TypeScript + React）+ **新增数据沙箱功能**
+- **核心新增功能**: 本地数据脱敏和沙箱管理（完全在桌面客户端实现）
+- **部署方式**: Docker 容器化部署
+
+数据脱敏和沙箱功能是桌面客户端的新增模块，不需要修改 Dify 后端的核心逻辑，仅需要后端配合进行文件路径验证。
 
 ## 术语表
 
-- **桌面客户端（Desktop_Client）**: 用户执行数据脱敏操作的本地桌面应用程序
-- **脱敏引擎（Masking_Engine）**: 负责识别和替换敏感数据为脱敏值的组件
-- **沙箱（Sandbox）**: 用户配置的本地目录，用于隔离和存储脱敏文件及脱敏元数据
+- **桌面客户端（Desktop_Client）**: 基于 Dify 前端（Next.js + TypeScript + React）的本地桌面应用程序，新增数据脱敏和沙箱功能
+- **脱敏引擎（Masking_Engine）**: 在桌面客户端中实现的 TypeScript 组件，负责识别和替换敏感数据为脱敏值
+- **沙箱（Sandbox）**: 用户在本地配置的目录，用于隔离和存储脱敏文件及脱敏元数据
 - **脱敏规则（Masking_Rule）**: 用户定义的模式或配置，指定要脱敏的数据及脱敏方式
-- **映射存储（Mapping_Store）**: 维护原始值与脱敏值之间关系的本地存储机制
-- **云平台（Cloud_Platform）**: 使用 AI 模型处理脱敏文件的 Dify 云服务
+- **映射存储（Mapping_Store）**: 在本地维护原始值与脱敏值之间关系的存储机制（轻量级数据库或文件存储）
+- **Dify_后端（Dify_Backend）**: 处理脱敏文件的 Dify 云服务后端（Python Flask + DDD）
 - **反向替换（Reverse_Substitution）**: 在云端返回结果时恢复原始敏感数据的过程
 - **脱敏文件（Masked_File）**: 敏感数据已被替换为脱敏值的文件
 - **脱敏日志（Masking_Log）**: 存储在沙箱中的脱敏操作记录
 
-## Requirements
+## 需求
 
-### Requirement 1: Local Data Masking
+### 需求 1：本地数据脱敏
 
-**User Story:** As a user with sensitive data, I want to mask confidential information in my files locally, so that I can safely upload them to the cloud for AI processing without exposing private data.
+**用户故事：** 作为拥有敏感数据的用户，我希望在本地对文件中的机密信息进行脱敏处理，以便在不暴露私密数据的情况下安全地将其上传到云端进行 AI 处理。
 
-#### Acceptance Criteria
+#### 验收标准
 
-1. WHEN a user selects a file for masking, THE Desktop_Client SHALL apply all active masking rules to identify sensitive data
-2. WHEN sensitive data is identified, THE Masking_Engine SHALL replace it with masked values according to the masking rule configuration
-3. WHEN masking is performed, THE Mapping_Store SHALL record the relationship between each original value and its masked replacement
-4. WHEN a masking operation completes, THE Desktop_Client SHALL save the masked file to the user-configured sandbox path
-5. THE Mapping_Store SHALL use a lightweight database or custom file storage format to maintain privacy and performance
+1. WHEN 用户选择文件进行脱敏时，THE 桌面客户端 SHALL 应用所有活动的脱敏规则来识别敏感数据
+2. WHEN 识别到敏感数据时，THE 脱敏引擎 SHALL 根据脱敏规则配置将其替换为脱敏值
+3. WHEN 执行脱敏操作时，THE 映射存储 SHALL 记录每个原始值与其脱敏替换值之间的关系
+4. WHEN 脱敏操作完成时，THE 桌面客户端 SHALL 将脱敏文件保存到用户配置的沙箱路径
+5. THE 映射存储 SHALL 使用轻量级数据库或自定义文件存储格式以保持隐私和性能
 
-### Requirement 2: Custom Masking Rules
+### 需求 2：自定义脱敏规则
 
-**User Story:** As a user, I want to define custom masking rules for different types of sensitive data, so that I can control exactly what information is protected and how it is masked.
+**用户故事：** 作为用户，我希望为不同类型的敏感数据定义自定义脱敏规则，以便精确控制要保护的信息及其脱敏方式。
 
-#### Acceptance Criteria
+#### 验收标准
 
-1. WHEN a user creates a masking rule, THE Desktop_Client SHALL allow specification of pattern matching criteria (regex, keywords, or data type)
-2. WHEN a user creates a masking rule, THE Desktop_Client SHALL allow selection of masking strategy (replacement, tokenization, or format-preserving)
-3. WHEN a user saves a masking rule, THE Desktop_Client SHALL validate the rule configuration and store it for future use
-4. WHEN a user edits a masking rule, THE Desktop_Client SHALL update the rule configuration and apply changes to subsequent masking operations
-5. WHEN a user deletes a masking rule, THE Desktop_Client SHALL remove it from active rules and prevent its use in future operations
-6. THE Desktop_Client SHALL provide predefined rule templates for common sensitive data types (email, phone, credit card, SSN)
+1. WHEN 用户创建脱敏规则时，THE 桌面客户端 SHALL 允许指定模式匹配条件（正则表达式、关键词或数据类型）
+2. WHEN 用户创建脱敏规则时，THE 桌面客户端 SHALL 允许选择脱敏策略（替换、令牌化或格式保留）
+3. WHEN 用户保存脱敏规则时，THE 桌面客户端 SHALL 验证规则配置并存储以供将来使用
+4. WHEN 用户编辑脱敏规则时，THE 桌面客户端 SHALL 更新规则配置并将更改应用于后续脱敏操作
+5. WHEN 用户删除脱敏规则时，THE 桌面客户端 SHALL 从活动规则中移除它并防止其在未来操作中使用
+6. THE 桌面客户端 SHALL 为常见敏感数据类型（电子邮件、电话、信用卡、身份证号）提供预定义规则模板
 
-### Requirement 3: Sandbox Environment
+### 需求 3：沙箱环境
 
-**User Story:** As a user, I want to configure a local sandbox directory for storing masked files, so that my sensitive data processing is isolated and secure.
+**用户故事：** 作为用户，我希望配置一个本地沙箱目录来存储脱敏文件，以便我的敏感数据处理是隔离和安全的。
 
-#### Acceptance Criteria
+#### 验收标准
 
-1. WHEN a user configures the sandbox path, THE Desktop_Client SHALL validate that the path exists and is writable
-2. WHEN the sandbox path is set, THE Desktop_Client SHALL store this configuration persistently across application sessions
-3. WHEN a user attempts to select a file for upload, THE Desktop_Client SHALL restrict file selection to only files within the configured sandbox path
-4. WHEN masked files are created, THE Desktop_Client SHALL save them exclusively within the sandbox directory structure
-5. WHEN masking logs are generated, THE Desktop_Client SHALL store them within the sandbox path
-6. THE Desktop_Client SHALL prevent any file operations outside the sandbox boundary once configured
+1. WHEN 用户配置沙箱路径时，THE 桌面客户端 SHALL 验证路径存在且可写
+2. WHEN 设置沙箱路径时，THE 桌面客户端 SHALL 在应用程序会话之间持久存储此配置
+3. WHEN 用户尝试选择文件进行上传时，THE 桌面客户端 SHALL 将文件选择限制为仅配置的沙箱路径内的文件
+4. WHEN 创建脱敏文件时，THE 桌面客户端 SHALL 仅在沙箱目录结构内保存它们
+5. WHEN 生成脱敏日志时，THE 桌面客户端 SHALL 将其存储在沙箱路径内
+6. THE 桌面客户端 SHALL 在配置后防止任何沙箱边界外的文件操作
 
-### Requirement 4: File Upload to Cloud
+### 需求 4：文件上传到云端
 
-**User Story:** As a user, I want to upload masked files from my sandbox to the cloud platform, so that I can leverage AI processing capabilities without exposing my original sensitive data.
+**用户故事：** 作为用户，我希望将沙箱中的脱敏文件上传到 Dify 后端，以便在不暴露原始敏感数据的情况下利用 AI 处理能力。
 
-#### Acceptance Criteria
+#### 验收标准
 
-1. WHEN a user initiates file upload, THE Desktop_Client SHALL verify the file is located within the sandbox path before proceeding
-2. WHEN uploading a masked file, THE Desktop_Client SHALL transmit only the masked version to the Cloud_Platform
-3. WHEN the Cloud_Platform receives a file, THE Cloud_Platform SHALL process it with AI models without accessing the original data
-4. WHEN file upload fails, THE Desktop_Client SHALL provide clear error messages and maintain the masked file in the sandbox
-5. THE Desktop_Client SHALL track upload status and provide progress feedback to the user
+1. WHEN 用户启动文件上传时，THE 桌面客户端 SHALL 在继续之前验证文件位于沙箱路径内
+2. WHEN 上传脱敏文件时，THE 桌面客户端 SHALL 仅将脱敏版本传输到 Dify_后端
+3. WHEN Dify_后端接收文件时，THE Dify_后端 SHALL 使用 AI 模型处理它而不访问原始数据
+4. WHEN 文件上传失败时，THE 桌面客户端 SHALL 提供清晰的错误消息并在沙箱中保留脱敏文件
+5. THE 桌面客户端 SHALL 跟踪上传状态并向用户提供进度反馈
 
-### Requirement 5: Mapping Storage and Retrieval
+### 需求 5：映射存储和检索
 
-**User Story:** As a user, I want the system to securely store the mapping between original and masked data, so that my sensitive information can be restored when results are returned.
+**用户故事：** 作为用户，我希望系统安全地存储原始数据和脱敏数据之间的映射，以便在返回结果时可以恢复我的敏感信息。
 
-#### Acceptance Criteria
+#### 验收标准
 
-1. WHEN a masking operation creates a mapping entry, THE Mapping_Store SHALL persist it with a unique identifier linking to the masked file
-2. WHEN storing mapping data, THE Mapping_Store SHALL encrypt sensitive original values at rest
-3. WHEN a masked file is uploaded, THE Desktop_Client SHALL associate the mapping identifier with the upload operation
-4. WHEN retrieving mappings, THE Mapping_Store SHALL return only mappings associated with the specified file or operation
-5. THE Mapping_Store SHALL support efficient lookup by masked value to enable reverse substitution
-6. WHEN a masked file is deleted from the sandbox, THE Mapping_Store SHALL provide an option to delete associated mapping data
+1. WHEN 脱敏操作创建映射条目时，THE 映射存储 SHALL 使用链接到脱敏文件的唯一标识符持久化它
+2. WHEN 存储映射数据时，THE 映射存储 SHALL 对静态的敏感原始值进行加密
+3. WHEN 上传脱敏文件时，THE 桌面客户端 SHALL 将映射标识符与上传操作关联
+4. WHEN 检索映射时，THE 映射存储 SHALL 仅返回与指定文件或操作关联的映射
+5. THE 映射存储 SHALL 支持通过脱敏值进行高效查找以实现反向替换
+6. WHEN 从沙箱中删除脱敏文件时，THE 映射存储 SHALL 提供删除关联映射数据的选项
 
-### Requirement 6: Reverse Substitution
+### 需求 6：反向替换
 
-**User Story:** As a user, I want the system to automatically restore my original sensitive data in results returned from the cloud, so that I can view complete and accurate information without manual intervention.
+**用户故事：** 作为用户，我希望系统自动恢复从 Dify 后端返回结果中的原始敏感数据，以便无需手动干预即可查看完整准确的信息。
 
-#### Acceptance Criteria
+#### 验收标准
 
-1. WHEN results are received from the Cloud_Platform, THE Desktop_Client SHALL identify all masked values in the response
-2. WHEN a masked value is found, THE Desktop_Client SHALL query the Mapping_Store to retrieve the original value
-3. WHEN the original value is retrieved, THE Desktop_Client SHALL replace the masked value with the original in the result
-4. WHEN all substitutions are complete, THE Desktop_Client SHALL present the fully restored results to the user
-5. IF a masked value has no corresponding mapping, THEN THE Desktop_Client SHALL log a warning and leave the masked value unchanged
-6. THE Desktop_Client SHALL perform reverse substitution for all supported result formats (text, JSON, structured data)
+1. WHEN 从 Dify_后端接收到结果时，THE 桌面客户端 SHALL 识别响应中的所有脱敏值
+2. WHEN 找到脱敏值时，THE 桌面客户端 SHALL 查询映射存储以检索原始值
+3. WHEN 检索到原始值时，THE 桌面客户端 SHALL 在结果中将脱敏值替换为原始值
+4. WHEN 所有替换完成时，THE 桌面客户端 SHALL 向用户呈现完全恢复的结果
+5. IF 脱敏值没有相应的映射，THEN THE 桌面客户端 SHALL 记录警告并保持脱敏值不变
+6. THE 桌面客户端 SHALL 对所有支持的结果格式（文本、JSON、结构化数据）执行反向替换
 
-### Requirement 7: Backend File Access Control
+### 需求 7：后端文件访问控制
 
-**User Story:** As a system administrator, I want the backend to only access files from user-configured sandbox paths, so that the system enforces security boundaries and prevents unauthorized file access.
+**用户故事：** 作为系统管理员，我希望 Dify 后端仅访问用户配置的沙箱路径中的文件，以便系统强制执行安全边界并防止未经授权的文件访问。
 
-#### Acceptance Criteria
+#### 验收标准
 
-1. WHEN the backend retrieves a file, THE Cloud_Platform SHALL verify the file path is within an authorized sandbox path
-2. WHEN a file path is outside the sandbox, THE Cloud_Platform SHALL reject the request and return an authorization error
-3. THE Cloud_Platform SHALL maintain a registry of authorized sandbox paths per user or session
-4. WHEN processing file operations, THE Cloud_Platform SHALL validate all file paths against the sandbox registry before execution
-5. THE Cloud_Platform SHALL log all file access attempts for security auditing
+1. WHEN Dify_后端检索文件时，THE Dify_后端 SHALL 验证文件路径在授权的沙箱路径内
+2. WHEN 文件路径在沙箱外时，THE Dify_后端 SHALL 拒绝请求并返回授权错误
+3. THE Dify_后端 SHALL 为每个用户或会话维护授权沙箱路径的注册表
+4. WHEN 处理文件操作时，THE Dify_后端 SHALL 在执行前根据沙箱注册表验证所有文件路径
+5. THE Dify_后端 SHALL 记录所有文件访问尝试以进行安全审计
 
-### Requirement 8: Data Masking Service API
+### 需求 8：数据脱敏服务 API（可选）
 
-**User Story:** As a developer, I want a dedicated data masking service with well-defined APIs, so that masking functionality can be integrated, maintained, and scaled independently.
+**用户故事：** 作为开发人员，我希望有一个具有明确定义 API 的专用数据脱敏服务，以便可以独立集成、维护和扩展脱敏功能。
 
-#### Acceptance Criteria
+**注意**: 此需求为可选需求。由于数据脱敏功能主要在桌面客户端实现，如果不需要独立的后端服务，可以将所有脱敏逻辑保留在前端。
 
-1. THE Data_Masking_Service SHALL provide an API endpoint for applying masking rules to file content
-2. THE Data_Masking_Service SHALL provide an API endpoint for managing masking rules (create, read, update, delete)
-3. THE Data_Masking_Service SHALL provide an API endpoint for performing reverse substitution on result data
-4. THE Data_Masking_Service SHALL provide an API endpoint for querying mapping data by file or operation identifier
-5. WHEN an API request is received, THE Data_Masking_Service SHALL validate authentication and authorization before processing
-6. WHEN an API operation fails, THE Data_Masking_Service SHALL return structured error responses with appropriate HTTP status codes
+#### 验收标准
 
-### Requirement 9: Security and Privacy
+1. WHERE 需要独立的数据脱敏服务，THE 数据脱敏服务 SHALL 提供用于将脱敏规则应用于文件内容的 API 端点
+2. WHERE 需要独立的数据脱敏服务，THE 数据脱敏服务 SHALL 提供用于管理脱敏规则（创建、读取、更新、删除）的 API 端点
+3. WHERE 需要独立的数据脱敏服务，THE 数据脱敏服务 SHALL 提供用于对结果数据执行反向替换的 API 端点
+4. WHERE 需要独立的数据脱敏服务，THE 数据脱敏服务 SHALL 提供用于按文件或操作标识符查询映射数据的 API 端点
+5. WHERE 需要独立的数据脱敏服务，WHEN 接收到 API 请求时，THE 数据脱敏服务 SHALL 在处理前验证身份验证和授权
+6. WHERE 需要独立的数据脱敏服务，WHEN API 操作失败时，THE 数据脱敏服务 SHALL 返回带有适当 HTTP 状态码的结构化错误响应
 
-**User Story:** As a user concerned about data privacy, I want the masking system to protect my sensitive information throughout its lifecycle, so that my confidential data never leaves my control in unmasked form.
+### 需求 9：安全和隐私
 
-#### Acceptance Criteria
+**用户故事：** 作为关注数据隐私的用户，我希望脱敏系统在整个生命周期中保护我的敏感信息，以便我的机密数据永远不会以未脱敏的形式离开我的控制。
 
-1. THE Mapping_Store SHALL encrypt all original sensitive values using industry-standard encryption (AES-256 or equivalent)
-2. THE Desktop_Client SHALL never transmit original sensitive data to the Cloud_Platform
-3. THE Desktop_Client SHALL store encryption keys securely using the operating system's credential management system
-4. WHEN masking logs are created, THE Desktop_Client SHALL exclude original sensitive values from log entries
-5. THE Desktop_Client SHALL provide an option to permanently delete mapping data and masked files from the sandbox
-6. THE Desktop_Client SHALL clear sensitive data from memory immediately after masking or reverse substitution operations
+#### 验收标准
 
-### Requirement 10: User Interface and Experience
+1. THE 映射存储 SHALL 使用行业标准加密（AES-256 或同等级别）加密所有原始敏感值
+2. THE 桌面客户端 SHALL 永远不会将原始敏感数据传输到 Dify_后端
+3. THE 桌面客户端 SHALL 使用操作系统的凭据管理系统安全地存储加密密钥
+4. WHEN 创建脱敏日志时，THE 桌面客户端 SHALL 从日志条目中排除原始敏感值
+5. THE 桌面客户端 SHALL 提供从沙箱永久删除映射数据和脱敏文件的选项
+6. THE 桌面客户端 SHALL 在脱敏或反向替换操作后立即从内存中清除敏感数据
 
-**User Story:** As a user, I want an intuitive interface for managing masking rules and sandbox configuration, so that I can easily protect my data without technical expertise.
+### 需求 10：用户界面和体验
 
-#### Acceptance Criteria
+**用户故事：** 作为用户，我希望有一个直观的界面来管理脱敏规则和沙箱配置，以便无需技术专业知识即可轻松保护我的数据。
 
-1. WHEN a user opens the data masking interface, THE Desktop_Client SHALL display a clear overview of configured rules and sandbox status
-2. WHEN a user creates or edits a masking rule, THE Desktop_Client SHALL provide a guided form with validation and preview capabilities
-3. WHEN a user configures the sandbox path, THE Desktop_Client SHALL provide a directory picker and display the current configuration
-4. WHEN masking operations are in progress, THE Desktop_Client SHALL display progress indicators and status messages
-5. WHEN errors occur, THE Desktop_Client SHALL present user-friendly error messages with actionable guidance
-6. THE Desktop_Client SHALL provide help documentation and tooltips explaining masking concepts and operations
+#### 验收标准
 
-### Requirement 11: Performance and Scalability
+1. WHEN 用户打开数据脱敏界面时，THE 桌面客户端 SHALL 显示已配置规则和沙箱状态的清晰概览
+2. WHEN 用户创建或编辑脱敏规则时，THE 桌面客户端 SHALL 提供带有验证和预览功能的引导式表单
+3. WHEN 用户配置沙箱路径时，THE 桌面客户端 SHALL 提供目录选择器并显示当前配置
+4. WHEN 脱敏操作正在进行时，THE 桌面客户端 SHALL 显示进度指示器和状态消息
+5. WHEN 发生错误时，THE 桌面客户端 SHALL 呈现用户友好的错误消息和可操作的指导
+6. THE 桌面客户端 SHALL 提供帮助文档和工具提示来解释脱敏概念和操作
 
-**User Story:** As a user working with large files, I want the masking system to process my data efficiently, so that I can complete my work without excessive delays.
+### 需求 11：性能和可扩展性
 
-#### Acceptance Criteria
+**用户故事：** 作为处理大文件的用户，我希望脱敏系统高效地处理我的数据，以便无需过度延迟即可完成工作。
 
-1. WHEN masking a file under 10MB, THE Masking_Engine SHALL complete processing within 5 seconds
-2. WHEN masking large files, THE Desktop_Client SHALL process data in streaming mode to avoid memory exhaustion
-3. THE Mapping_Store SHALL support at least 100,000 mapping entries per file without performance degradation
-4. WHEN performing reverse substitution, THE Desktop_Client SHALL complete processing within 2x the time of the original masking operation
-5. THE Desktop_Client SHALL provide progress feedback for operations exceeding 3 seconds
+#### 验收标准
 
-### Requirement 12: Error Handling and Recovery
+1. WHEN 脱敏小于 10MB 的文件时，THE 脱敏引擎 SHALL 在 5 秒内完成处理
+2. WHEN 脱敏大文件时，THE 桌面客户端 SHALL 以流式模式处理数据以避免内存耗尽
+3. THE 映射存储 SHALL 支持每个文件至少 100,000 个映射条目而不会出现性能下降
+4. WHEN 执行反向替换时，THE 桌面客户端 SHALL 在原始脱敏操作时间的 2 倍内完成处理
+5. THE 桌面客户端 SHALL 为超过 3 秒的操作提供进度反馈
 
-**User Story:** As a user, I want the system to handle errors gracefully and provide recovery options, so that I don't lose my work or data when problems occur.
+### 需求 12：错误处理和恢复
 
-#### Acceptance Criteria
+**用户故事：** 作为用户，我希望系统优雅地处理错误并提供恢复选项，以便在出现问题时不会丢失我的工作或数据。
 
-1. WHEN a masking operation fails, THE Desktop_Client SHALL preserve the original file and provide an error report
-2. WHEN mapping storage fails, THE Desktop_Client SHALL roll back the masking operation and notify the user
-3. WHEN upload to the Cloud_Platform fails, THE Desktop_Client SHALL retain the masked file and mapping data for retry
-4. WHEN reverse substitution encounters missing mappings, THE Desktop_Client SHALL complete partial substitution and report missing entries
-5. THE Desktop_Client SHALL maintain operation logs to support troubleshooting and recovery
-6. THE Desktop_Client SHALL provide a manual recovery option to restore system state after critical failures
+#### 验收标准
+
+1. WHEN 脱敏操作失败时，THE 桌面客户端 SHALL 保留原始文件并提供错误报告
+2. WHEN 映射存储失败时，THE 桌面客户端 SHALL 回滚脱敏操作并通知用户
+3. WHEN 上传到 Dify_后端失败时，THE 桌面客户端 SHALL 保留脱敏文件和映射数据以供重试
+4. WHEN 反向替换遇到缺失的映射时，THE 桌面客户端 SHALL 完成部分替换并报告缺失的条目
+5. THE 桌面客户端 SHALL 维护操作日志以支持故障排除和恢复
+6. THE 桌面客户端 SHALL 提供手动恢复选项以在关键故障后恢复系统状态

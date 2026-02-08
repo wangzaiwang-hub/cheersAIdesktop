@@ -5,9 +5,9 @@
   "identifier": "com.cheersai.desktop",
   "build": {
     "frontendDist": "../out",
-    "devUrl": "http://localhost:3500",
-    "beforeDevCommand": "echo 'Please ensure dev server is running on port 3500'",
-    "beforeBuildCommand": "pnpm build"
+    "devUrl": "http://localhost:3000",
+    "beforeDevCommand": "echo 'Please ensure dev server is running on port 3000'",
+    "beforeBuildCommand": "echo 'Production build not supported yet. See TAURI_BUILD_STATUS.md'"
   },
   "app": {
     "windows": [

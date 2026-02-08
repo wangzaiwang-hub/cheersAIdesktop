@@ -36,6 +36,7 @@ const nextConfig: NextConfig = {
     removeConsole: isDev ? false : { exclude: ['warn', 'error'] },
   },
   trailingSlash: true,
+  serverExternalPackages: ['esbuild-wasm'],
 }
 
 export default withMDX(nextConfig)
