@@ -132,16 +132,23 @@ Object.defineProperty(window, 'matchMedia', {
 const createMockLocalStorage = () => {
   const storage: Record<string, string> = {}
   return {
-    getItem: vi.fn((key: string) => storage[key] || null),
-    setItem: vi.fn((key: string, value: string) => {
+    getItem: (key: string) => storage[key] ?? null,
+    setItem: (key: string, value: string) => {
       storage[key] = value
-    }),
-    removeItem: vi.fn((key: string) => {
+    },
+    removeItem: (key: string) => {
       delete storage[key]
-    }),
-    clear: vi.fn(() => {
+    },
+    clear: () => {
       Object.keys(storage).forEach(key => delete storage[key])
-    }),
+    },
+    key: (index: number) => {
+      const keys = Object.keys(storage)
+      return keys[index] || null
+    },
+    get length() {
+      return Object.keys(storage).length
+    },
     get storage() { return { ...storage } },
   }
 }

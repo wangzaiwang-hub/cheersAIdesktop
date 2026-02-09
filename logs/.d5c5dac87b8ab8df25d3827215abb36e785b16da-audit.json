@@ -1,0 +1,15 @@
+{
+    "keep": {
+        "days": true,
+        "amount": 14
+    },
+    "auditLog": "E:\\dify-main\\dify-main\\logs\\.d5c5dac87b8ab8df25d3827215abb36e785b16da-audit.json",
+    "files": [
+        {
+            "date": 1770616283539,
+            "name": "E:\\dify-main\\dify-main\\logs\\error-2026-02-09.log",
+            "hash": "e94a16bb562520e6860f513167a0c0040466264c0ea43ce41ec13f91704b236f"
+        }
+    ],
+    "hashType": "sha256"
+}
