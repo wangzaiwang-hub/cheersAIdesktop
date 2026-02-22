@@ -24,7 +24,6 @@ const DataMaskingPage: FC = () => {
   const [activeTab, setActiveTab] = useState<TabType>('rules')
   const [rules, setRules] = useState<MaskingRule[]>([])
   const [sandboxPath, setSandboxPath] = useState<string>('')
-  const [dirHandle, setDirHandle] = useState<FileSystemDirectoryHandle | undefined>()
   const [isLoading, setIsLoading] = useState(false)
   const [rulesManager] = useState(() => new RulesManager())
   const [showForm, setShowForm] = useState(false)
@@ -53,16 +52,12 @@ const DataMaskingPage: FC = () => {
 
   const loadSandboxPath = () => {
     const saved = localStorage.getItem('sandbox_path')
-    if (saved) {
+    if (saved && !saved.startsWith('['))
       setSandboxPath(saved)
-      // Note: dirHandle is NOT restored from localStorage (browser security).
-      // If saved path starts with [浏览器目录], user must re-select via Browse button.
-    }
   }
 
-  const handleSandboxConfigured = (path: string, handle?: FileSystemDirectoryHandle) => {
+  const handleSandboxConfigured = (path: string) => {
     setSandboxPath(path)
-    setDirHandle(handle)
     localStorage.setItem('sandbox_path', path)
   }
 
@@ -297,7 +292,7 @@ const DataMaskingPage: FC = () => {
                   </button>
                 </div>
               ) : (
-                <FileMasking rules={rules} sandboxPath={sandboxPath} dirHandle={dirHandle} />
+                <FileMasking rules={rules} sandboxPath={sandboxPath} />
               )}
             </div>
           )}
@@ -324,7 +319,7 @@ const DataMaskingPage: FC = () => {
                   </button>
                 </div>
               ) : (
-                <FileList sandboxPath={sandboxPath} dirHandle={dirHandle} onRefresh={loadRules} />
+                <FileList sandboxPath={sandboxPath} onRefresh={loadRules} />
               )}
             </div>
           )}
