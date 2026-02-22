@@ -1,9 +1,0 @@
-{
-  "name": "cheersai-electron",
-  "version": "1.12.0",
-  "description": "CheersAI Desktop Application",
-  "main": "main.js",
-  "type": "commonjs",
-  "author": "CheersAI Team",
-  "license": "MIT"
-}

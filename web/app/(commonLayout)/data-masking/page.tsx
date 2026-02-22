@@ -9,11 +9,12 @@ import {
   RiFolderShield2Line,
 } from '@remixicon/react'
 import useDocumentTitle from '@/hooks/use-document-title'
-import type { MaskingRule } from '@/lib/data-masking/types'
 import { RulesManager } from '@/lib/data-masking/rules-manager'
+import type { MaskingRule } from '@/lib/data-masking/types'
 import { SandboxConfig } from '@/app/components/data-masking/sandbox-config'
 import { FileMasking } from '@/app/components/data-masking/file-masking'
 import { FileList } from '@/app/components/data-masking/file-list'
+import { RuleForm } from '@/app/components/data-masking/rule-form'
 
 type TabType = 'rules' | 'sandbox' | 'mask' | 'files'
 
@@ -25,6 +26,8 @@ const DataMaskingPage: FC = () => {
   const [sandboxPath, setSandboxPath] = useState<string>('')
   const [isLoading, setIsLoading] = useState(false)
   const [rulesManager] = useState(() => new RulesManager())
+  const [showForm, setShowForm] = useState(false)
+  const [editingRule, setEditingRule] = useState<MaskingRule | undefined>()
 
   // Load rules and sandbox path on mount
   useEffect(() => {
@@ -57,6 +60,51 @@ const DataMaskingPage: FC = () => {
   const handleSandboxConfigured = (path: string) => {
     setSandboxPath(path)
     localStorage.setItem('sandbox_path', path)
+  }
+
+  const handleCreateRule = async (data: Omit<MaskingRule, 'id' | 'createdAt' | 'updatedAt'>) => {
+    try {
+      await rulesManager.createRule(data)
+      await loadRules()
+      setShowForm(false)
+    }
+    catch (err) {
+      console.error('Failed to create rule:', err)
+    }
+  }
+
+  const handleUpdateRule = async (data: Omit<MaskingRule, 'id' | 'createdAt' | 'updatedAt'>) => {
+    if (!editingRule) return
+    try {
+      await rulesManager.updateRule(editingRule.id, data)
+      await loadRules()
+      setShowForm(false)
+      setEditingRule(undefined)
+    }
+    catch (err) {
+      console.error('Failed to update rule:', err)
+    }
+  }
+
+  const handleDeleteRule = async (ruleId: string) => {
+    if (!confirm('确定要删除这条规则吗？')) return
+    try {
+      await rulesManager.deleteRule(ruleId)
+      await loadRules()
+    }
+    catch (err) {
+      console.error('Failed to delete rule:', err)
+    }
+  }
+
+  const handleToggleRule = async (ruleId: string, enabled: boolean) => {
+    try {
+      await rulesManager.updateRule(ruleId, { enabled })
+      await loadRules()
+    }
+    catch (err) {
+      console.error('Failed to toggle rule:', err)
+    }
   }
 
   const tabs = [
@@ -128,9 +176,18 @@ const DataMaskingPage: FC = () => {
           {activeTab === 'rules' && (
             <div className="space-y-6">
               <div className="bg-white rounded-lg border border-gray-200 p-6">
-                <h2 className="text-lg font-semibold text-gray-900 mb-4">
-                  脱敏规则
-                </h2>
+                <div className="flex items-center justify-between mb-4">
+                  <h2 className="text-lg font-semibold text-gray-900">
+                    脱敏规则
+                  </h2>
+                  <button
+                    onClick={() => { setEditingRule(undefined); setShowForm(true) }}
+                    className="inline-flex items-center gap-1.5 px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700"
+                  >
+                    <RiShieldCheckLine className="w-4 h-4" />
+                    添加规则
+                  </button>
+                </div>
                 {isLoading ? (
                   <div className="flex items-center justify-center py-12">
                     <div className="text-sm text-gray-500">加载中...</div>
@@ -142,6 +199,12 @@ const DataMaskingPage: FC = () => {
                     <p className="mt-1 text-sm text-gray-500">
                       创建您的第一条脱敏规则开始使用
                     </p>
+                    <button
+                      onClick={() => { setEditingRule(undefined); setShowForm(true) }}
+                      className="mt-4 inline-flex items-center px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700"
+                    >
+                      创建规则
+                    </button>
                   </div>
                 ) : (
                   <div className="space-y-3">
@@ -159,10 +222,36 @@ const DataMaskingPage: FC = () => {
                               <span className={`px-2 py-0.5 text-xs rounded ${rule.enabled ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-800'}`}>
                                 {rule.enabled ? '已启用' : '已禁用'}
                               </span>
+                              <span className="text-xs text-gray-400">
+                                优先级: {rule.priority}
+                              </span>
                             </div>
                             <p className="mt-1 text-xs text-gray-500">
                               {rule.description}
                             </p>
+                            <p className="mt-0.5 text-xs text-gray-400 font-mono">
+                              {typeof rule.pattern === 'string' ? rule.pattern : rule.pattern.source}
+                            </p>
+                          </div>
+                          <div className="flex items-center gap-2 ml-4">
+                            <button
+                              onClick={() => handleToggleRule(rule.id, !rule.enabled)}
+                              className={`px-2.5 py-1 text-xs rounded ${rule.enabled ? 'text-orange-700 bg-orange-50 hover:bg-orange-100' : 'text-green-700 bg-green-50 hover:bg-green-100'}`}
+                            >
+                              {rule.enabled ? '禁用' : '启用'}
+                            </button>
+                            <button
+                              onClick={() => { setEditingRule(rule); setShowForm(true) }}
+                              className="px-2.5 py-1 text-xs text-blue-700 bg-blue-50 rounded hover:bg-blue-100"
+                            >
+                              编辑
+                            </button>
+                            <button
+                              onClick={() => handleDeleteRule(rule.id)}
+                              className="px-2.5 py-1 text-xs text-red-700 bg-red-50 rounded hover:bg-red-100"
+                            >
+                              删除
+                            </button>
                           </div>
                         </div>
                       </div>
@@ -237,6 +326,15 @@ const DataMaskingPage: FC = () => {
           )}
         </div>
       </div>
+
+      {/* Rule Form Modal */}
+      {showForm && (
+        <RuleForm
+          rule={editingRule}
+          onSave={editingRule ? handleUpdateRule : handleCreateRule}
+          onCancel={() => { setShowForm(false); setEditingRule(undefined) }}
+        />
+      )}
     </div>
   )
 }

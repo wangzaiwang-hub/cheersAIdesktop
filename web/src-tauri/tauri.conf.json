@@ -7,7 +7,7 @@
     "frontendDist": "../out",
     "devUrl": "http://localhost:3000",
     "beforeDevCommand": "echo 'Please ensure dev server is running on port 3000'",
-    "beforeBuildCommand": "echo 'Production build not supported yet. See TAURI_BUILD_STATUS.md'"
+    "beforeBuildCommand": ""
   },
   "app": {
     "windows": [

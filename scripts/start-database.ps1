@@ -2,7 +2,7 @@
 
 Write-Host "正在启动数据库服务...`n" -ForegroundColor Green
 
-docker-compose -f docker-compose.dev.yaml up -d
+docker-compose -f "$PSScriptRoot\..\docker-compose.dev.yaml" up -d
 
 Write-Host "`n数据库服务已启动！`n" -ForegroundColor Green
 
@@ -18,6 +18,3 @@ Write-Host "Weaviate: localhost:8080" -ForegroundColor Cyan
 Write-Host "  API Key: WVF5YThaHlkYwhGUSmCRgsX3tD5ngdN8pkih`n" -ForegroundColor White
 
 Write-Host "Plugin Daemon: localhost:5002`n" -ForegroundColor Cyan
-
-Write-Host "查看日志: docker-compose -f docker-compose.dev.yaml logs -f" -ForegroundColor Yellow
-Write-Host "停止服务: docker-compose -f docker-compose.dev.yaml down" -ForegroundColor Yellow
