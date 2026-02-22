@@ -4,10 +4,12 @@ import { useState } from 'react'
 import { DocumentIcon, EyeIcon, PlayIcon, CheckCircleIcon } from '@heroicons/react/24/outline'
 import type { MaskingRule } from '@/lib/data-masking/types'
 import { isTauri, writeFileToSandbox } from '@/lib/data-masking/tauri-fs'
+import { saveSandboxFile } from '@/service/sandbox-files'
 
 interface FileMaskingProps {
   rules: MaskingRule[]
   sandboxPath: string
+  dirHandle?: FileSystemDirectoryHandle
 }
 
 function applyRules(content: string, rules: MaskingRule[], selectedIds: string[]): { masked: string; count: number } {
@@ -38,7 +40,7 @@ function getMaskedFileName(originalName: string): string {
   return `${originalName.substring(0, dotIdx)}.masked${originalName.substring(dotIdx)}`
 }
 
-export function FileMasking({ rules, sandboxPath }: FileMaskingProps) {
+export function FileMasking({ rules, sandboxPath, dirHandle }: FileMaskingProps) {
   const [selectedFile, setSelectedFile] = useState<File | null>(null)
   const [fileContent, setFileContent] = useState('')
   const [selectedRules, setSelectedRules] = useState<string[]>([])
@@ -102,15 +104,42 @@ export function FileMasking({ rules, sandboxPath }: FileMaskingProps) {
     if (!selectedFile || !maskedContent) return
     setIsProcessing(true)
     setError('')
-    try {
-      const maskedFileName = getMaskedFileName(selectedFile.name)
+    const maskedFileName = getMaskedFileName(selectedFile.name)
+    const messages: string[] = []
 
-      // 如果在 Tauri 环境且配置了沙箱路径，写到本地磁盘
-      if (isTauri() && sandboxPath) {
-        await writeFileToSandbox(sandboxPath, maskedFileName, maskedContent)
+    // 1) Save to sandbox directory
+    const isBrowserDirPath = sandboxPath.startsWith('[浏览器目录]')
+    if (sandboxPath) {
+      try {
+        if (dirHandle) {
+          // Browser File System Access API — write directly to user-picked directory
+          const fileHandle = await dirHandle.getFileHandle(maskedFileName, { create: true })
+          const writable = await (fileHandle as unknown as { createWritable: () => Promise<WritableStream> }).createWritable()
+          const writer = writable.getWriter()
+          await writer.write(maskedContent)
+          await writer.close()
+          messages.push(`已保存到 ${dirHandle.name}/${maskedFileName}`)
+        }
+        else if (isBrowserDirPath) {
+          // Browser dir handle lost (page refresh) — skip backend call, just do browser download
+          messages.push('浏览器目录句柄已失效，请重新选择目录。本次仅触发浏览器下载。')
+        }
+        else if (isTauri()) {
+          await writeFileToSandbox(sandboxPath, maskedFileName, maskedContent)
+          messages.push(`已保存到 ${sandboxPath}`)
+        }
+        else {
+          const result = await saveSandboxFile(sandboxPath, maskedFileName, maskedContent)
+          messages.push(`已保存到 ${result.file_path}`)
+        }
       }
+      catch (saveErr) {
+        messages.push(`沙箱保存失败: ${saveErr instanceof Error ? saveErr.message : saveErr}`)
+      }
+    }
 
-      // 同时触发浏览器下载
+    // 2) Browser download (always)
+    try {
       const blob = new Blob([maskedContent], { type: 'text/markdown;charset=utf-8' })
       const url = URL.createObjectURL(blob)
       const a = document.createElement('a')
@@ -120,17 +149,22 @@ export function FileMasking({ rules, sandboxPath }: FileMaskingProps) {
       a.click()
       document.body.removeChild(a)
       URL.revokeObjectURL(url)
+      messages.push('浏览器下载已触发')
+    }
+    catch {
+      messages.push('浏览器下载失败')
+    }
 
-      // 同时存到 IndexedDB（作为备份）
-      saveMaskedFile(maskedFileName, maskedContent)
+    // 3) IndexedDB backup
+    saveMaskedFile(maskedFileName, maskedContent)
+
+    setIsProcessing(false)
+    // Show result with details
+    const hasError = messages.some(m => m.includes('失败'))
+    if (hasError)
+      setError(messages.join('；'))
+    else
       setShowSuccess(true)
-    }
-    catch (err) {
-      setError(`保存失败: ${err}`)
-    }
-    finally {
-      setIsProcessing(false)
-    }
   }
 
   const saveMaskedFile = (fileName: string, content: string) => {
@@ -178,10 +212,11 @@ export function FileMasking({ rules, sandboxPath }: FileMaskingProps) {
         <CheckCircleIcon className="mx-auto h-12 w-12 text-green-500" />
         <h3 className="mt-2 text-sm font-medium text-gray-900">脱敏完成</h3>
         <p className="mt-1 text-sm text-gray-500">
-          已匹配并替换 {matchCount} 处敏感数据，文件已下载
+          已匹配并替换 {matchCount} 处敏感数据
         </p>
         <p className="mt-1 text-xs text-gray-400">
           文件名: {selectedFile ? getMaskedFileName(selectedFile.name) : ''}
+          {sandboxPath && ` → ${sandboxPath}`}
         </p>
         <button
           onClick={handleReset}

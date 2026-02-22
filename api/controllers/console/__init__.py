@@ -118,6 +118,8 @@ from .explore import (
 # Import tag controllers
 from .tag import tags
 
+# Data masking sandbox_files uses its own Blueprint (registered in ext_blueprints)
+
 # Import workspace controllers
 from .workspace import (
     account,
@@ -195,6 +197,7 @@ __all__ = [
     "rag_pipeline_workflow",
     "recommended_app",
     "saved_message",
+    "sandbox_files",
     "setup",
     "site",
     "spec",
