@@ -12,9 +12,11 @@ interface RuleFormProps {
 }
 
 const STRATEGY_OPTIONS = [
-  { value: 'replacement', label: '替换' },
-  { value: 'tokenization', label: '令牌化' },
-  { value: 'format-preserving', label: '格式保留' },
+  { value: 'replacement', label: '完全替换', hint: '用固定文本替换匹配内容' },
+  { value: 'partial-mask', label: '部分遮蔽', hint: '保留首尾字符，中间用*遮蔽' },
+  { value: 'context-keyword', label: '上下文匹配', hint: '仅在关键词附近才脱敏' },
+  { value: 'tokenization', label: '编号替换', hint: '替换为 [前缀_001] 格式' },
+  { value: 'format-preserving', label: '格式保留', hint: '保留原始格式结构' },
 ]
 
 const TEMPLATE_LIST = Object.entries(RULE_TEMPLATES).map(([key, tpl]) => ({
@@ -32,8 +34,20 @@ export const RuleForm: FC<RuleFormProps> = ({ rule, onSave, onCancel }) => {
   const [strategyType, setStrategyType] = useState<string>(rule?.strategy?.type ?? 'replacement')
   const [strategyValue, setStrategyValue] = useState(() => {
     if (!rule?.strategy) return '***'
-    const s = rule.strategy as Record<string, string>
-    return s.value ?? s.prefix ?? s.format ?? '***'
+    const s = rule.strategy as Record<string, unknown>
+    return String(s.value ?? s.prefix ?? s.format ?? s.keywords ?? '***')
+  })
+  const [keepFirst, setKeepFirst] = useState(() => {
+    if (rule?.strategy?.type === 'partial-mask') return rule.strategy.keepFirst
+    return 3
+  })
+  const [keepLast, setKeepLast] = useState(() => {
+    if (rule?.strategy?.type === 'partial-mask') return rule.strategy.keepLast
+    return 4
+  })
+  const [maskChar, setMaskChar] = useState(() => {
+    if (rule?.strategy?.type === 'partial-mask') return rule.strategy.maskChar
+    return '*'
   })
   const [enabled, setEnabled] = useState(rule?.enabled ?? true)
   const [priority, setPriority] = useState(rule?.priority ?? 1)
@@ -44,21 +58,37 @@ export const RuleForm: FC<RuleFormProps> = ({ rule, onSave, onCancel }) => {
     if (!tpl) return
     setName(tpl.name)
     setDescription(tpl.description)
-    setPattern(typeof tpl.pattern === 'string' ? tpl.pattern : tpl.pattern.source)
+    setPattern(typeof tpl.pattern === 'string' ? tpl.pattern : String(tpl.pattern))
     setStrategyType(tpl.strategy.type)
-    setStrategyValue((tpl.strategy as Record<string, string>).value ?? '***')
     setPriority(tpl.priority)
     setEnabled(tpl.enabled)
+    if (tpl.strategy.type === 'partial-mask') {
+      setKeepFirst(tpl.strategy.keepFirst)
+      setKeepLast(tpl.strategy.keepLast)
+      setMaskChar(tpl.strategy.maskChar)
+      setStrategyValue('')
+    }
+    else if (tpl.strategy.type === 'context-keyword') {
+      setStrategyValue(tpl.strategy.value)
+    }
+    else {
+      const s = tpl.strategy as Record<string, string>
+      setStrategyValue(s.value ?? s.prefix ?? s.format ?? '***')
+    }
   }
 
   const buildStrategy = (): MaskingStrategy => {
     switch (strategyType) {
+      case 'partial-mask':
+        return { type: 'partial-mask', keepFirst, keepLast, maskChar: maskChar || '*' }
+      case 'context-keyword':
+        return { type: 'context-keyword', keywords: [], value: strategyValue || '***' }
       case 'tokenization':
-        return { type: 'tokenization', prefix: strategyValue }
+        return { type: 'tokenization', prefix: strategyValue || 'TOKEN' }
       case 'format-preserving':
         return { type: 'format-preserving', format: strategyValue }
       default:
-        return { type: 'replacement', value: strategyValue }
+        return { type: 'replacement', value: strategyValue || '***' }
     }
   }
 
@@ -146,30 +176,56 @@ export const RuleForm: FC<RuleFormProps> = ({ rule, onSave, onCancel }) => {
           </div>
 
           {/* Strategy */}
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">脱敏策略</label>
-              <select
-                value={strategyType}
-                onChange={e => setStrategyType(e.target.value)}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-              >
-                {STRATEGY_OPTIONS.map(opt => (
-                  <option key={opt.value} value={opt.value}>{opt.label}</option>
-                ))}
-              </select>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">脱敏策略</label>
+            <select
+              value={strategyType}
+              onChange={e => setStrategyType(e.target.value)}
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+            >
+              {STRATEGY_OPTIONS.map(opt => (
+                <option key={opt.value} value={opt.value}>{opt.label} — {opt.hint}</option>
+              ))}
+            </select>
+          </div>
+
+          {/* Strategy-specific fields */}
+          {strategyType === 'partial-mask' && (
+            <div className="grid grid-cols-3 gap-3">
+              <div>
+                <label className="block text-xs font-medium text-gray-600 mb-1">保留前N位</label>
+                <input type="number" value={keepFirst} onChange={e => setKeepFirst(Number(e.target.value))} min={0}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500" />
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-gray-600 mb-1">保留后N位</label>
+                <input type="number" value={keepLast} onChange={e => setKeepLast(Number(e.target.value))} min={0}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500" />
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-gray-600 mb-1">遮蔽字符</label>
+                <input type="text" value={maskChar} onChange={e => setMaskChar(e.target.value)} maxLength={1}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500" />
+              </div>
             </div>
+          )}
+
+          {(strategyType === 'replacement' || strategyType === 'context-keyword') && (
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">替换值</label>
-              <input
-                type="text"
-                value={strategyValue}
-                onChange={e => setStrategyValue(e.target.value)}
-                placeholder="***"
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-              />
+              <input type="text" value={strategyValue} onChange={e => setStrategyValue(e.target.value)} placeholder="***"
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500" />
             </div>
-          </div>
+          )}
+
+          {strategyType === 'tokenization' && (
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">编号前缀</label>
+              <input type="text" value={strategyValue} onChange={e => setStrategyValue(e.target.value)} placeholder="ORG"
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500" />
+              <p className="mt-1 text-xs text-gray-400">效果: [ORG_001], [ORG_002], ...</p>
+            </div>
+          )}
 
           {/* Priority & Enabled */}
           <div className="grid grid-cols-2 gap-4">

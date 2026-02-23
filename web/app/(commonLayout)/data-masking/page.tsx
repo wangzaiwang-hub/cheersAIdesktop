@@ -96,6 +96,18 @@ const DataMaskingPage: FC = () => {
     }
   }
 
+  const handleResetRules = async () => {
+    if (!confirm('确定要删除所有现有规则吗？删除后可以用新模板重新创建。')) return
+    try {
+      for (const rule of rules)
+        await rulesManager.deleteRule(rule.id)
+      await loadRules()
+    }
+    catch (err) {
+      console.error('Failed to reset rules:', err)
+    }
+  }
+
   const handleToggleRule = async (ruleId: string, enabled: boolean) => {
     try {
       await rulesManager.updateRule(ruleId, { enabled })
@@ -179,13 +191,23 @@ const DataMaskingPage: FC = () => {
                   <h2 className="text-lg font-semibold text-gray-900">
                     脱敏规则
                   </h2>
-                  <button
-                    onClick={() => { setEditingRule(undefined); setShowForm(true) }}
-                    className="inline-flex items-center gap-1.5 px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700"
-                  >
-                    <RiShieldCheckLine className="w-4 h-4" />
-                    添加规则
-                  </button>
+                  <div className="flex items-center gap-2">
+                    {rules.length > 0 && (
+                      <button
+                        onClick={handleResetRules}
+                        className="px-3 py-2 text-sm font-medium text-red-600 bg-red-50 rounded-lg hover:bg-red-100"
+                      >
+                        清除全部
+                      </button>
+                    )}
+                    <button
+                      onClick={() => { setEditingRule(undefined); setShowForm(true) }}
+                      className="inline-flex items-center gap-1.5 px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700"
+                    >
+                      <RiShieldCheckLine className="w-4 h-4" />
+                      添加规则
+                    </button>
+                  </div>
                 </div>
                 {isLoading ? (
                   <div className="flex items-center justify-center py-12">
@@ -292,7 +314,7 @@ const DataMaskingPage: FC = () => {
                   </button>
                 </div>
               ) : (
-                <FileMasking rules={rules} sandboxPath={sandboxPath} />
+                <FileMasking sandboxPath={sandboxPath} />
               )}
             </div>
           )}

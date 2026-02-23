@@ -67,3 +67,30 @@ export async function deleteSandboxFile(
     throw new Error(err.error || `Delete failed: ${res.status}`)
   }
 }
+
+
+// --- NER Scan API ---
+
+const NER_API_BASE = '/console/api/data-masking/ner'
+
+export interface NerEntity {
+  text: string
+  label: string
+  type: string
+  count: string
+  start?: string
+}
+
+export async function scanEntities(content: string): Promise<NerEntity[]> {
+  const res = await fetch(apiUrl(`${NER_API_BASE}/scan`), {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ content }),
+  })
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}))
+    throw new Error(err.error || `NER scan failed: ${res.status}`)
+  }
+  const data = await res.json()
+  return data.entities || []
+}

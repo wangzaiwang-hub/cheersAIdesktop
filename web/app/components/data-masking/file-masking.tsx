@@ -1,35 +1,24 @@
 'use client'
 
 import { useState } from 'react'
-import { DocumentIcon, EyeIcon, PlayIcon, CheckCircleIcon } from '@heroicons/react/24/outline'
-import type { MaskingRule } from '@/lib/data-masking/types'
+import {
+  DocumentIcon,
+  EyeIcon,
+  PlayIcon,
+  CheckCircleIcon,
+  MagnifyingGlassIcon,
+} from '@heroicons/react/24/outline'
 import { saveSandboxFile } from '@/service/sandbox-files'
+import { scanEntities } from '@/service/sandbox-files'
+import type { NerEntity } from '@/service/sandbox-files'
 
 interface FileMaskingProps {
-  rules: MaskingRule[]
   sandboxPath: string
 }
 
-function applyRules(content: string, rules: MaskingRule[], selectedIds: string[]): { masked: string; count: number } {
-  let masked = content
-  let totalCount = 0
-  const activeRules = rules
-    .filter(r => selectedIds.includes(r.id) && r.enabled)
-    .sort((a, b) => a.priority - b.priority)
-
-  for (const rule of activeRules) {
-    const pattern = typeof rule.pattern === 'string' ? rule.pattern : rule.pattern.source
-    const regex = new RegExp(pattern, 'g')
-    const replacement = rule.strategy.type === 'replacement'
-      ? (rule.strategy as { type: 'replacement'; value: string }).value
-      : rule.strategy.type === 'tokenization'
-        ? `${(rule.strategy as { type: 'tokenization'; prefix: string }).prefix}_TOKEN`
-        : '***'
-    let matchCount = 0
-    masked = masked.replace(regex, () => { matchCount++; return replacement })
-    totalCount += matchCount
-  }
-  return { masked, count: totalCount }
+interface ConfirmableEntity extends NerEntity {
+  checked: boolean
+  replacement: string
 }
 
 function getMaskedFileName(originalName: string): string {
@@ -38,15 +27,36 @@ function getMaskedFileName(originalName: string): string {
   return `${originalName.substring(0, dotIdx)}.masked${originalName.substring(dotIdx)}`
 }
 
-export function FileMasking({ rules, sandboxPath }: FileMaskingProps) {
+function applyEntityMasking(
+  content: string,
+  entities: ConfirmableEntity[],
+): { masked: string; count: number } {
+  let masked = content
+  let totalCount = 0
+  // Sort by text length descending to avoid partial replacements
+  const sorted = [...entities]
+    .filter(e => e.checked)
+    .sort((a, b) => b.text.length - a.text.length)
+  for (const entity of sorted) {
+    const escaped = entity.text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+    const regex = new RegExp(escaped, 'g')
+    let matchCount = 0
+    masked = masked.replace(regex, () => { matchCount++; return entity.replacement })
+    totalCount += matchCount
+  }
+  return { masked, count: totalCount }
+}
+
+type Step = 'upload' | 'scanning' | 'confirm' | 'preview' | 'done'
+
+export function FileMasking({ sandboxPath }: FileMaskingProps) {
+  const [step, setStep] = useState<Step>('upload')
   const [selectedFile, setSelectedFile] = useState<File | null>(null)
   const [fileContent, setFileContent] = useState('')
-  const [selectedRules, setSelectedRules] = useState<string[]>([])
+  const [entities, setEntities] = useState<ConfirmableEntity[]>([])
   const [preview, setPreview] = useState('')
   const [maskedContent, setMaskedContent] = useState('')
   const [matchCount, setMatchCount] = useState(0)
-  const [isProcessing, setIsProcessing] = useState(false)
-  const [showSuccess, setShowSuccess] = useState(false)
   const [error, setError] = useState('')
 
   const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -58,49 +68,67 @@ export function FileMasking({ rules, sandboxPath }: FileMaskingProps) {
       return
     }
     setSelectedFile(file)
+    setStep('upload')
+    setEntities([])
     setPreview('')
     setMaskedContent('')
-    setShowSuccess(false)
     const reader = new FileReader()
     reader.onload = (ev) => { setFileContent(ev.target?.result as string ?? '') }
     reader.onerror = () => setError('读取文件失败')
     reader.readAsText(file)
   }
 
-  const handleRuleToggle = (ruleId: string) => {
-    setSelectedRules(prev =>
-      prev.includes(ruleId) ? prev.filter(id => id !== ruleId) : [...prev, ruleId],
-    )
-    setPreview('')
-    setMaskedContent('')
+  const handleScan = async () => {
+    if (!fileContent) return
+    setStep('scanning')
+    setError('')
+    try {
+      const result = await scanEntities(fileContent)
+      const confirmable: ConfirmableEntity[] = result.map((e, i) => ({
+        ...e,
+        checked: true,
+        replacement: `[${e.label}_${String(i + 1).padStart(3, '0')}]`,
+      }))
+      setEntities(confirmable)
+      setStep('confirm')
+    }
+    catch (err) {
+      setError(`NER 扫描失败: ${err instanceof Error ? err.message : err}`)
+      setStep('upload')
+    }
+  }
+
+  const handleToggleEntity = (idx: number) => {
+    setEntities(prev => prev.map((e, i) => i === idx ? { ...e, checked: !e.checked } : e))
+  }
+
+  const handleToggleAll = (checked: boolean) => {
+    setEntities(prev => prev.map(e => ({ ...e, checked })))
+  }
+
+  const handleReplacementChange = (idx: number, value: string) => {
+    setEntities(prev => prev.map((e, i) => i === idx ? { ...e, replacement: value } : e))
   }
 
   const handlePreview = () => {
-    if (!selectedFile || !fileContent || selectedRules.length === 0) return
-    setIsProcessing(true)
-    setError('')
-    try {
-      const { masked, count } = applyRules(fileContent, rules, selectedRules)
-      setMaskedContent(masked)
-      setMatchCount(count)
-      setPreview(masked.length > 2000 ? masked.substring(0, 2000) + '\n\n... (已截断)' : masked)
+    const checked = entities.filter(e => e.checked)
+    if (checked.length === 0) {
+      setError('请至少选择一个实体进行脱敏')
+      return
     }
-    catch (err) {
-      setError(`脱敏预览失败: ${err}`)
-    }
-    finally {
-      setIsProcessing(false)
-    }
+    const { masked, count } = applyEntityMasking(fileContent, entities)
+    setMaskedContent(masked)
+    setMatchCount(count)
+    setPreview(masked.length > 3000 ? masked.substring(0, 3000) + '\n\n... (已截断)' : masked)
+    setStep('preview')
   }
 
   const handleExecute = async () => {
     if (!selectedFile || !maskedContent) return
-    setIsProcessing(true)
     setError('')
     const maskedFileName = getMaskedFileName(selectedFile.name)
     const messages: string[] = []
 
-    // Save to sandbox via Flask backend
     if (sandboxPath) {
       try {
         const result = await saveSandboxFile(sandboxPath, maskedFileName, maskedContent)
@@ -128,33 +156,33 @@ export function FileMasking({ rules, sandboxPath }: FileMaskingProps) {
       messages.push('浏览器下载失败')
     }
 
-    setIsProcessing(false)
     const hasError = messages.some(m => m.includes('失败'))
     if (hasError)
       setError(messages.join('；'))
     else
-      setShowSuccess(true)
+      setStep('done')
   }
 
   const handleReset = () => {
     setSelectedFile(null)
     setFileContent('')
-    setSelectedRules([])
+    setEntities([])
     setPreview('')
     setMaskedContent('')
     setMatchCount(0)
-    setShowSuccess(false)
+    setStep('upload')
     setError('')
   }
 
-  if (showSuccess) {
+  // --- Done screen ---
+  if (step === 'done') {
     return (
       <div className="text-center py-12">
         <CheckCircleIcon className="mx-auto h-12 w-12 text-green-500" />
         <h3 className="mt-2 text-sm font-medium text-gray-900">脱敏完成</h3>
-        <p className="mt-1 text-sm text-gray-500">已匹配并替换 {matchCount} 处敏感数据</p>
+        <p className="mt-1 text-sm text-gray-500">已替换 {matchCount} 处敏感数据</p>
         <p className="mt-1 text-xs text-gray-400">
-          文件名: {selectedFile ? getMaskedFileName(selectedFile.name) : ''} → {sandboxPath}
+          文件: {selectedFile ? getMaskedFileName(selectedFile.name) : ''} → {sandboxPath}
         </p>
         <button onClick={handleReset}
           className="mt-4 inline-flex items-center px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700">
@@ -164,7 +192,15 @@ export function FileMasking({ rules, sandboxPath }: FileMaskingProps) {
     )
   }
 
-  const enabledRules = rules.filter(r => r.enabled)
+  const checkedCount = entities.filter(e => e.checked).length
+
+  // Group entities by label for display
+  const grouped: Record<string, ConfirmableEntity[]> = {}
+  entities.forEach((e, idx) => {
+    const key = e.label
+    if (!grouped[key]) grouped[key] = []
+    grouped[key].push({ ...e, replacement: e.replacement, checked: e.checked })
+  })
 
   return (
     <div className="space-y-6">
@@ -172,6 +208,7 @@ export function FileMasking({ rules, sandboxPath }: FileMaskingProps) {
         <div className="text-sm text-red-600 bg-red-50 px-4 py-3 rounded-lg">{error}</div>
       )}
 
+      {/* Step 1: Upload */}
       <div>
         <label className="block text-sm font-medium text-gray-700 mb-2">选择要脱敏的 Markdown 文件</label>
         <input type="file" accept=".md" onChange={handleFileSelect}
@@ -184,36 +221,75 @@ export function FileMasking({ rules, sandboxPath }: FileMaskingProps) {
         )}
       </div>
 
-      {selectedFile && fileContent && (
+      {/* Scan button */}
+      {selectedFile && fileContent && step === 'upload' && (
+        <button type="button" onClick={handleScan}
+          className="inline-flex items-center gap-2 rounded-md bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-700">
+          <MagnifyingGlassIcon className="h-4 w-4" />智能扫描敏感实体
+        </button>
+      )}
+
+      {/* Scanning indicator */}
+      {step === 'scanning' && (
+        <div className="flex items-center gap-3 py-8 justify-center">
+          <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-indigo-600"></div>
+          <span className="text-sm text-gray-600">正在使用 NER 模型扫描文档，请稍候...</span>
+        </div>
+      )}
+
+      {/* Step 2: Confirm entities */}
+      {step === 'confirm' && entities.length > 0 && (
         <div>
-          <label className="block text-sm font-medium text-gray-700 mb-2">选择脱敏规则</label>
-          {enabledRules.length === 0 ? (
-            <p className="text-sm text-gray-500">暂无已启用的脱敏规则，请先在「脱敏规则」标签页创建并启用规则</p>
-          ) : (
-            <div className="space-y-2">
-              {enabledRules.map(rule => (
-                <label key={rule.id} className="flex items-center gap-3 p-3 border border-gray-200 rounded-md hover:bg-gray-50 cursor-pointer">
-                  <input type="checkbox" checked={selectedRules.includes(rule.id)} onChange={() => handleRuleToggle(rule.id)}
-                    className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded" />
-                  <div className="flex-1">
-                    <div className="text-sm font-medium text-gray-900">{rule.name}</div>
-                    <div className="text-xs text-gray-500">{rule.description}</div>
-                  </div>
-                  <span className="text-xs text-gray-400 font-mono">
-                    {typeof rule.pattern === 'string' ? rule.pattern : rule.pattern.source}
-                  </span>
-                </label>
-              ))}
+          <div className="flex items-center justify-between mb-3">
+            <label className="block text-sm font-medium text-gray-700">
+              发现 {entities.length} 个候选敏感实体，请确认需要脱敏的项目
+            </label>
+            <div className="flex items-center gap-2">
+              <button onClick={() => handleToggleAll(true)}
+                className="text-xs text-blue-600 hover:underline">全选</button>
+              <span className="text-xs text-gray-300">|</span>
+              <button onClick={() => handleToggleAll(false)}
+                className="text-xs text-blue-600 hover:underline">全不选</button>
             </div>
+          </div>
+          <div className="space-y-4 max-h-96 overflow-y-auto">
+            {Object.entries(grouped).map(([label, items]) => (
+              <div key={label}>
+                <div className="text-xs font-semibold text-gray-500 mb-1 px-1">{label} ({items.length})</div>
+                <div className="space-y-1">
+                  {items.map((item) => {
+                    const realIdx = entities.findIndex(e => e.text === item.text && e.label === item.label)
+                    return (
+                      <label key={`${item.text}-${item.label}`}
+                        className="flex items-center gap-3 p-2 border border-gray-200 rounded-md hover:bg-gray-50 cursor-pointer">
+                        <input type="checkbox" checked={entities[realIdx]?.checked ?? false}
+                          onChange={() => handleToggleEntity(realIdx)}
+                          className="h-4 w-4 text-blue-600 border-gray-300 rounded" />
+                        <span className="text-sm font-medium text-gray-900 min-w-[80px]">{item.text}</span>
+                        <span className="text-xs text-gray-400">×{item.count}</span>
+                        <span className="text-xs text-gray-300">→</span>
+                        <input type="text" value={entities[realIdx]?.replacement ?? ''}
+                          onChange={e => handleReplacementChange(realIdx, e.target.value)}
+                          className="flex-1 text-xs border border-gray-200 rounded px-2 py-1 text-gray-700 focus:ring-1 focus:ring-blue-500 focus:border-blue-500" />
+                      </label>
+                    )
+                  })}
+                </div>
+              </div>
+            ))}
+          </div>
+          {entities.length === 0 && (
+            <p className="text-sm text-gray-500 py-4 text-center">未发现候选敏感实体</p>
           )}
         </div>
       )}
 
-      {preview && (
+      {/* Preview */}
+      {step === 'preview' && preview && (
         <div>
           <div className="flex items-center justify-between mb-2">
-            <label className="block text-sm font-medium text-gray-700">脱敏预览 (匹配 {matchCount} 处)</label>
-            <span className="text-xs text-gray-400">输出: {selectedFile ? getMaskedFileName(selectedFile.name) : ''}</span>
+            <label className="block text-sm font-medium text-gray-700">脱敏预览 (替换 {matchCount} 处)</label>
+            <button onClick={() => setStep('confirm')} className="text-xs text-blue-600 hover:underline">返回修改</button>
           </div>
           <div className="p-4 bg-gray-50 border border-gray-200 rounded-md max-h-80 overflow-y-auto">
             <pre className="text-xs text-gray-700 whitespace-pre-wrap font-mono">{preview}</pre>
@@ -221,17 +297,28 @@ export function FileMasking({ rules, sandboxPath }: FileMaskingProps) {
         </div>
       )}
 
-      <div className="flex gap-3">
-        <button type="button" onClick={handlePreview}
-          disabled={!selectedFile || !fileContent || selectedRules.length === 0 || isProcessing}
-          className="inline-flex items-center gap-2 rounded-md border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed">
-          <EyeIcon className="h-4 w-4" />预览脱敏
-        </button>
-        <button type="button" onClick={handleExecute} disabled={!maskedContent || isProcessing}
-          className="inline-flex items-center gap-2 rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed">
-          <PlayIcon className="h-4 w-4" />执行脱敏并保存
-        </button>
-      </div>
+      {/* Action buttons */}
+      {(step === 'confirm' || step === 'preview') && (
+        <div className="flex gap-3">
+          {step === 'confirm' && (
+            <button type="button" onClick={handlePreview}
+              disabled={checkedCount === 0}
+              className="inline-flex items-center gap-2 rounded-md border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed">
+              <EyeIcon className="h-4 w-4" />预览脱敏 ({checkedCount} 项)
+            </button>
+          )}
+          {step === 'preview' && (
+            <button type="button" onClick={handleExecute}
+              className="inline-flex items-center gap-2 rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700">
+              <PlayIcon className="h-4 w-4" />执行脱敏并保存
+            </button>
+          )}
+          <button type="button" onClick={handleReset}
+            className="inline-flex items-center gap-2 rounded-md border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-500 hover:bg-gray-50">
+            重新开始
+          </button>
+        </div>
+      )}
     </div>
   )
 }

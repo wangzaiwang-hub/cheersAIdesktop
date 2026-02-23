@@ -103,6 +103,19 @@ def init_app(app: DifyApp):
     )
     app.register_blueprint(sandbox_bp)
 
+    # NER scanning for data masking (no auth required, local dev tool)
+    from controllers.console.data_masking.ner_scan import ner_bp
+
+    _apply_cors_once(
+        ner_bp,
+        resources={r"/*": {"origins": dify_config.CONSOLE_CORS_ALLOW_ORIGINS}},
+        supports_credentials=True,
+        allow_headers=list(AUTHENTICATED_HEADERS),
+        methods=["GET", "PUT", "POST", "DELETE", "OPTIONS", "PATCH"],
+        expose_headers=list(EXPOSED_HEADERS),
+    )
+    app.register_blueprint(ner_bp)
+
     # Register trigger blueprint with CORS for webhook calls
     _apply_cors_once(
         trigger_bp,
