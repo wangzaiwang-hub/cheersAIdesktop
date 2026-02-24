@@ -2,12 +2,14 @@
 
 import { useState, useEffect } from 'react'
 import { CheckCircleIcon, XCircleIcon } from '@heroicons/react/24/outline'
+import { useSandboxSecurity } from '@/context/sandbox-security-context'
 
 interface SandboxConfigProps {
   onConfigured?: (path: string) => void
 }
 
 export function SandboxConfig({ onConfigured }: SandboxConfigProps) {
+  const { enabled: securityEnabled, setEnabled: setSecurityEnabled } = useSandboxSecurity()
   const [sandboxPath, setSandboxPath] = useState<string>('')
   const [currentPath, setCurrentPath] = useState<string>('')
   const [isValid, setIsValid] = useState<boolean | null>(null)
@@ -75,6 +77,35 @@ export function SandboxConfig({ onConfigured }: SandboxConfigProps) {
 
   return (
     <div className="space-y-6">
+      {/* Security mode toggle */}
+      <div className="rounded-lg border border-gray-200 bg-white p-4">
+        <div className="flex items-center justify-between">
+          <div className="flex-1">
+            <h3 className="text-sm font-medium text-gray-900">沙箱安全模式</h3>
+            <p className="text-xs text-gray-500 mt-0.5">
+              开启后，系统其他模块（知识库、工作流等）的文件上传仅限从沙箱目录选择脱敏后的文件
+            </p>
+          </div>
+          <button
+            onClick={() => setSecurityEnabled(!securityEnabled)}
+            className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
+              securityEnabled ? 'bg-blue-600' : 'bg-gray-300'
+            }`}
+          >
+            <span
+              className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
+                securityEnabled ? 'translate-x-6' : 'translate-x-1'
+              }`}
+            />
+          </button>
+        </div>
+        {securityEnabled && !currentPath && (
+          <div className="mt-3 rounded-md bg-amber-50 border border-amber-200 px-3 py-2">
+            <p className="text-xs text-amber-700">⚠️ 安全模式已开启，但尚未配置沙箱路径。请先在下方配置沙箱目录。</p>
+          </div>
+        )}
+      </div>
+
       {currentPath && (
         <div className="rounded-lg border border-gray-200 bg-gray-50 p-4">
           <div className="flex items-start gap-3">

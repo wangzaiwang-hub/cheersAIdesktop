@@ -17,7 +17,6 @@ import {
 import Link from 'next/link'
 import { useSelectedLayoutSegment } from 'next/navigation'
 import { useState } from 'react'
-import DifyLogo from '@/app/components/base/logo/dify-logo'
 import { useAppContext } from '@/context/app-context'
 import { Group } from '@/app/components/base/icons/src/vender/other'
 import { cn } from '@/utils/classnames'
@@ -126,7 +125,16 @@ const SideNav = () => {
         collapsed ? 'flex-col gap-1 px-2 py-4' : 'justify-between px-4 py-4',
       )}>
         <Link href="/apps" className="flex items-center gap-3 shrink-0">
-          <DifyLogo style="monochromeWhite" size="large" className={cn(collapsed ? 'w-8 h-8' : 'w-10 h-10')} />
+          <div className={cn(
+            'rounded-xl border border-white/20 overflow-hidden shrink-0',
+            collapsed ? 'w-8 h-8' : 'w-10 h-10',
+          )}>
+            <img
+              src="/logo/CheersAI.png"
+              alt="CheersAI"
+              className="w-full h-full object-cover scale-125"
+            />
+          </div>
           {!collapsed && (
             <div className="flex flex-col leading-tight">
               <span className="text-white/90 text-xs font-medium">省心用</span>

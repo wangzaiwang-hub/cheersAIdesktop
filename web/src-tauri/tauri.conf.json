@@ -12,7 +12,7 @@
   "app": {
     "windows": [
       {
-        "title": "CheersAI",
+        "title": "CheersAI Desktop - 智享AI，安全随行",
         "width": 1280,
         "height": 800,
         "minWidth": 1024,

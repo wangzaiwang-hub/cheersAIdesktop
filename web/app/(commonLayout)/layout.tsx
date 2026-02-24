@@ -11,6 +11,7 @@ import { AppContextProvider } from '@/context/app-context'
 import { EventEmitterContextProvider } from '@/context/event-emitter'
 import { ModalContextProvider } from '@/context/modal-context'
 import { ProviderContextProvider } from '@/context/provider-context'
+import { SandboxSecurityProvider } from '@/context/sandbox-security-context'
 import PartnerStack from '../components/billing/partner-stack'
 import Splash from '../components/splash'
 
@@ -24,6 +25,7 @@ const Layout = ({ children }: { children: ReactNode }) => {
           <EventEmitterContextProvider>
             <ProviderContextProvider>
               <ModalContextProvider>
+                <SandboxSecurityProvider>
                 <div className="flex h-screen">
                   <SideNav />
                   <main className="flex flex-1 min-w-0 flex-col overflow-hidden">
@@ -34,6 +36,7 @@ const Layout = ({ children }: { children: ReactNode }) => {
                 <ReadmePanel />
                 <GotoAnything />
                 <Splash />
+                </SandboxSecurityProvider>
               </ModalContextProvider>
             </ProviderContextProvider>
           </EventEmitterContextProvider>
