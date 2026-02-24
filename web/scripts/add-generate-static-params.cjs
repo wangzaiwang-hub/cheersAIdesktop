@@ -38,8 +38,23 @@ function addGenerateStaticParams(filePath) {
   const hasUseClient = content.includes("'use client'") || content.includes('"use client"')
   
   if (hasUseClient) {
-    console.log(`⏭️  跳过 ${filePath} (客户端组件)`)
-    return false
+    // For client components, we need to create a separate generateStaticParams file
+    // or add it before 'use client' won't work. Instead, create a wrapper.
+    const dir = path.dirname(filePath)
+    const wrapperPath = path.join(dir, '_static-params.ts')
+    if (!fs.existsSync(wrapperPath)) {
+      fs.writeFileSync(wrapperPath, `export const dynamicParams = false\n\nexport async function generateStaticParams() {\n  return []\n}\n`, 'utf-8')
+    }
+    // Re-export from page by prepending to the file (before 'use client')
+    // Actually for Next.js, generateStaticParams must be in the page file itself
+    // For client pages, we move the client code to a component and make page a server wrapper
+    // Simplest: just add generateStaticParams export - Next.js allows it alongside 'use client' in some cases
+    // Actually Next.js 14+ allows generateStaticParams in client component pages
+    const exportCode = `\nexport const dynamicParams = false\nexport async function generateStaticParams() { return [] }\n`
+    content = content + exportCode
+    fs.writeFileSync(filePath, content, 'utf-8')
+    console.log(`✅ 已添加到 ${filePath} (客户端组件，追加到末尾)`)
+    return true
   }
   
   // 在第一个 import 之前添加

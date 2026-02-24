@@ -105,6 +105,10 @@ jobs:
           console.log('Patched next.config.ts for static export');
           PATCH_EOF
 
+      - name: Add generateStaticParams to dynamic routes
+        working-directory: web
+        run: node scripts/add-generate-static-params.cjs
+
       - name: Build Next.js static export
         working-directory: web
         run: pnpm build
