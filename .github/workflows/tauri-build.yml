@@ -107,23 +107,15 @@ jobs:
 
       - name: Add generateStaticParams to dynamic routes
         working-directory: web
-        run: node scripts/add-generate-static-params.cjs
-
-      - name: Debug - verify explore page
-        working-directory: web
         shell: bash
         run: |
-          echo "=== page.tsx ==="
-          cat "app/(commonLayout)/explore/installed/[appId]/page.tsx"
-          echo ""
-          echo "=== _client-page.tsx ==="
-          cat "app/(commonLayout)/explore/installed/[appId]/_client-page.tsx" 2>/dev/null || echo "NOT FOUND"
-          echo ""
-          echo "=== Patched next.config.ts ==="
-          cat next.config.ts
-          echo ""
-          echo "=== All dynamic route pages with generateStaticParams ==="
-          grep -rl "generateStaticParams" app/ --include="page.tsx" | head -20
+          node scripts/add-generate-static-params.cjs
+
+          # Remove dynamic routes that can't work with static export
+          # These routes require runtime params from the backend
+          # In Tauri, they'll be loaded dynamically via client-side routing
+          rm -rf "app/(commonLayout)/explore/installed/[appId]"
+          echo "✅ Removed /explore/installed/[appId] (runtime-only route)"
 
       - name: Build Next.js static export
         working-directory: web
