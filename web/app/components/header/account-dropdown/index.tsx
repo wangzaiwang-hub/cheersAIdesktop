@@ -86,9 +86,9 @@ export default function AppSelector() {
               >
                 <MenuItems
                   className="
-                    absolute right-0 mt-1.5 w-60 max-w-80
-                    origin-top-right divide-y divide-divider-subtle rounded-xl bg-components-panel-bg-blur shadow-lg
-                    backdrop-blur-sm focus:outline-none
+                    absolute left-full bottom-0 ml-2 w-60 max-w-80
+                    origin-bottom-left divide-y divide-divider-subtle rounded-xl bg-components-panel-bg-blur shadow-lg
+                    backdrop-blur-sm focus:outline-none z-50
                   "
                 >
                   <div className="px-1 py-1">

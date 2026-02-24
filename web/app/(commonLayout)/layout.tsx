@@ -5,8 +5,7 @@ import AmplitudeProvider from '@/app/components/base/amplitude'
 import GA, { GaType } from '@/app/components/base/ga'
 import Zendesk from '@/app/components/base/zendesk'
 import GotoAnything from '@/app/components/goto-anything'
-import Header from '@/app/components/header'
-import HeaderWrapper from '@/app/components/header/header-wrapper'
+import SideNav from '@/app/components/header/side-nav'
 import ReadmePanel from '@/app/components/plugins/readme-panel'
 import { AppContextProvider } from '@/context/app-context'
 import { EventEmitterContextProvider } from '@/context/event-emitter'
@@ -25,10 +24,12 @@ const Layout = ({ children }: { children: ReactNode }) => {
           <EventEmitterContextProvider>
             <ProviderContextProvider>
               <ModalContextProvider>
-                <HeaderWrapper>
-                  <Header />
-                </HeaderWrapper>
-                {children}
+                <div className="flex h-screen">
+                  <SideNav />
+                  <main className="flex flex-1 min-w-0 flex-col overflow-hidden">
+                    {children}
+                  </main>
+                </div>
                 <PartnerStack />
                 <ReadmePanel />
                 <GotoAnything />
