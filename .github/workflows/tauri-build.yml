@@ -80,18 +80,30 @@ jobs:
             app/layout.tsx
           rm -f app/layout.tsx.bak
 
-          # Patch next.config.ts for static export:
-          # 1. Change output to 'export'
-          # 2. Remove redirects (incompatible with export)
-          # 3. Remove images.remotePatterns (incompatible with export)
-          node -e "
-            const fs = require('fs');
-            let c = fs.readFileSync('next.config.ts', 'utf-8');
-            c = c.replace(\"output: 'standalone'\", \"output: 'export'\");
-            c = c.replace(/async redirects\(\) \{[\s\S]*?\},\n/m, '');
-            c = c.replace(/images: \{[\s\S]*?\},\n/m, '');
-            fs.writeFileSync('next.config.ts', c);
-          "
+          # Patch next.config.ts for static export using line-by-line approach
+          node <<'PATCH_EOF'
+          const fs = require('fs');
+          const lines = fs.readFileSync('next.config.ts', 'utf-8').split('\n');
+          let inImages = false, inRedirects = false, braceDepth = 0;
+          const out = [];
+          for (const line of lines) {
+            // Track images block
+            if (/^\s*images:\s*\{/.test(line)) { inImages = true; braceDepth = 0; }
+            if (/^\s*async redirects\(\)/.test(line)) { inRedirects = true; braceDepth = 0; }
+            if (inImages || inRedirects) {
+              for (const ch of line) { if (ch === '{') braceDepth++; if (ch === '}') braceDepth--; }
+              if (braceDepth <= 0 && (inImages || inRedirects)) {
+                inImages = false; inRedirects = false;
+                continue; // skip the closing line too
+              }
+              continue; // skip lines inside the block
+            }
+            // Change output
+            out.push(line.replace("output: 'standalone'", "output: 'export'"));
+          }
+          fs.writeFileSync('next.config.ts', out.join('\n'));
+          console.log('Patched next.config.ts for static export');
+          PATCH_EOF
 
       - name: Build Next.js static export
         working-directory: web
