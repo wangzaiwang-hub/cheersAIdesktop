@@ -1,5 +1,4 @@
-import * as React from 'react'
-import Main from '@/app/components/explore/installed-app'
+import InstalledAppClient from './_client-page'
 
 export const dynamicParams = false
 
@@ -7,17 +6,6 @@ export async function generateStaticParams() {
   return []
 }
 
-export type IInstalledAppProps = {
-  params?: Promise<{
-    appId: string
-  }>
+export default function Page() {
+  return <InstalledAppClient />
 }
-
-async function InstalledApp({ params }: IInstalledAppProps) {
-  const { appId } = await (params ?? Promise.reject(new Error('Missing params')))
-  return (
-    <Main id={appId} />
-  )
-}
-
-export default InstalledApp
