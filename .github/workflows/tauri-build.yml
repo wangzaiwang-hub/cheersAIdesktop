@@ -55,35 +55,62 @@ jobs:
         working-directory: web
         run: pnpm install --frozen-lockfile
 
-      - name: Disable Google Fonts for offline build
+      - name: Create .env.local for build
         working-directory: web
         shell: bash
         run: |
-          # Backup layout.tsx
+          cp .env.example .env.local
+          # Override for production build
+          sed -i.bak 's/NEXT_PUBLIC_DEPLOY_ENV=DEVELOPMENT/NEXT_PUBLIC_DEPLOY_ENV=PRODUCTION/' .env.local
+          rm -f .env.local.bak
+
+      - name: Prepare for Tauri static build
+        working-directory: web
+        shell: bash
+        run: |
+          # Backup files
           cp app/layout.tsx app/layout.tsx.ci-backup
-          # Comment out Google Fonts import and usage
+          cp next.config.ts next.config.ts.ci-backup
+
+          # Disable Google Fonts (already commented but ensure clean)
           sed -i.bak \
             -e "s|import { Instrument_Serif } from 'next/font/google'|// \0|" \
             -e "s|const instrumentSerif = Instrument_Serif|// \0|" \
-            app/layout.tsx
-          # Replace className reference (if any active reference remains)
-          sed -i.bak \
             -e "s|className={cn(instrumentSerif\.className,|className={cn(|g" \
             app/layout.tsx
           rm -f app/layout.tsx.bak
+
+          # Patch next.config.ts for static export:
+          # 1. Change output to 'export'
+          # 2. Remove redirects (incompatible with export)
+          # 3. Remove images.remotePatterns (incompatible with export)
+          node -e "
+            const fs = require('fs');
+            let c = fs.readFileSync('next.config.ts', 'utf-8');
+            c = c.replace(\"output: 'standalone'\", \"output: 'export'\");
+            c = c.replace(/async redirects\(\) \{[\s\S]*?\},\n/m, '');
+            c = c.replace(/images: \{[\s\S]*?\},\n/m, '');
+            fs.writeFileSync('next.config.ts', c);
+          "
+
+      - name: Build Next.js static export
+        working-directory: web
+        run: pnpm build
+        env:
+          NEXT_TELEMETRY_DISABLED: 1
 
       - name: Build Tauri app
         working-directory: web
         run: pnpm tauri build --target ${{ matrix.target }}
 
-      - name: Restore layout.tsx
+      - name: Restore modified files
         if: always()
         working-directory: web
         shell: bash
         run: |
-          if [ -f app/layout.tsx.ci-backup ]; then
-            mv app/layout.tsx.ci-backup app/layout.tsx
-          fi
+          [ -f app/layout.tsx.ci-backup ] && mv app/layout.tsx.ci-backup app/layout.tsx
+          [ -f next.config.ts.ci-backup ] && mv next.config.ts.ci-backup next.config.ts
+          rm -f .env.local
 
       # Upload platform-specific artifacts
       - name: Upload Windows artifacts
@@ -122,7 +149,6 @@ jobs:
             web/src-tauri/target/x86_64-unknown-linux-gnu/release/bundle/deb/*.deb
             web/src-tauri/target/x86_64-unknown-linux-gnu/release/bundle/appimage/*.AppImage
 
-  # Create GitHub Release when triggered by tag push
   release:
     needs: build
     if: startsWith(github.ref, 'refs/tags/v')
