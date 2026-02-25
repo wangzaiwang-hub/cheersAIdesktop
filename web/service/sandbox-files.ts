@@ -95,11 +95,12 @@ export async function scanEntities(content: string): Promise<NerEntity[]> {
   return data.entities || []
 }
 
-/** Extract text from binary files (docx, pdf) via backend */
-export async function extractTextFromFile(file: File): Promise<{ content: string; file_name: string; file_type: string }> {
+/** Extract text from binary files (docx, pdf, images) via backend */
+export async function extractTextFromFile(file: File, ocr?: 'auto' | 'force'): Promise<{ content: string; file_name: string; file_type: string; needs_ocr?: boolean; message?: string }> {
   const formData = new FormData()
   formData.append('file', file)
-  const res = await fetch(apiUrl(`${NER_API_BASE}/extract-text`), {
+  const ocrParam = ocr === 'force' ? '?ocr=force' : ''
+  const res = await fetch(apiUrl(`${NER_API_BASE}/extract-text${ocrParam}`), {
     method: 'POST',
     body: formData,
   })

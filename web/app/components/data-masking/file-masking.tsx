@@ -21,7 +21,8 @@ import type { NerEntity } from '@/service/sandbox-files'
 const TEXT_EXTENSIONS = new Set(['.md', '.txt', '.csv', '.json', '.xml', '.yaml', '.yml', '.log', '.conf', '.ini', '.toml', '.html', '.htm', '.css', '.js', '.ts', '.py', '.java', '.sql', '.sh', '.bat'])
 // Binary formats requiring backend extraction
 const BINARY_EXTENSIONS = new Set(['.docx', '.pdf'])
-const ALL_EXTENSIONS = [...TEXT_EXTENSIONS, ...BINARY_EXTENSIONS]
+const IMAGE_EXTENSIONS = new Set(['.png', '.jpg', '.jpeg', '.bmp', '.tiff', '.tif', '.webp'])
+const ALL_EXTENSIONS = [...TEXT_EXTENSIONS, ...BINARY_EXTENSIONS, ...IMAGE_EXTENSIONS]
 const ACCEPT_STRING = ALL_EXTENSIONS.join(',')
 interface FileMaskingProps {
   sandboxPath: string
@@ -43,7 +44,7 @@ function getMaskedFileName(originalName: string): string {
   const ext = originalName.substring(dotIdx)
   const base = originalName.substring(0, dotIdx)
   // Binary formats get .masked.txt since we output plain text
-  if (BINARY_EXTENSIONS.has(ext.toLowerCase()))
+  if (BINARY_EXTENSIONS.has(ext.toLowerCase()) || IMAGE_EXTENSIONS.has(ext.toLowerCase()))
     return `${base}.masked.txt`
   return `${base}.masked${ext}`
 }
@@ -55,11 +56,12 @@ function getFileExtension(name: string): string {
 
 function isSupportedFile(name: string): boolean {
   const ext = getFileExtension(name)
-  return TEXT_EXTENSIONS.has(ext) || BINARY_EXTENSIONS.has(ext)
+  return TEXT_EXTENSIONS.has(ext) || BINARY_EXTENSIONS.has(ext) || IMAGE_EXTENSIONS.has(ext)
 }
 
 function isBinaryFile(name: string): boolean {
-  return BINARY_EXTENSIONS.has(getFileExtension(name))
+  const ext = getFileExtension(name)
+  return BINARY_EXTENSIONS.has(ext) || IMAGE_EXTENSIONS.has(ext)
 }
 
 function escapeRegex(str: string): string {
@@ -110,8 +112,33 @@ export function FileMasking({ sandboxPath }: FileMaskingProps) {
   const [error, setError] = useState('')
   const [dragging, setDragging] = useState(false)
   const [extracting, setExtracting] = useState(false)
+  const [extractProgress, setExtractProgress] = useState(0)
+  const [needsOcr, setNeedsOcr] = useState(false)
+  const [ocrRunning, setOcrRunning] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
   const dropRef = useRef<HTMLDivElement>(null)
+
+  const progressTimerRef = useRef<ReturnType<typeof setInterval> | null>(null)
+
+  const startProgress = useCallback((cap: number, step: number, interval: number) => {
+    if (progressTimerRef.current) clearInterval(progressTimerRef.current)
+    setExtractProgress(0)
+    progressTimerRef.current = setInterval(() => {
+      setExtractProgress(prev => {
+        if (prev >= cap) return cap
+        return prev + step
+      })
+    }, interval)
+  }, [])
+
+  const finishProgress = useCallback((onDone: () => void) => {
+    if (progressTimerRef.current) {
+      clearInterval(progressTimerRef.current)
+      progressTimerRef.current = null
+    }
+    setExtractProgress(100)
+    setTimeout(onDone, 400)
+  }, [])
 
   const processFile = useCallback((file: File) => {
     setError('')
@@ -125,30 +152,41 @@ export function FileMasking({ sandboxPath }: FileMaskingProps) {
     setManualReplacements([])
     setPreview('')
     setMaskedContent('')
+    setNeedsOcr(false)
 
     if (isBinaryFile(file.name)) {
-      // Binary files: extract text via backend
       setFileContent('')
       setExtracting(true)
+      startProgress(90, 8, 300)
       extractTextFromFile(file)
         .then((result) => {
-          setFileContent(result.content)
-          setExtracting(false)
+          if (result.needs_ocr) {
+            if (progressTimerRef.current) { clearInterval(progressTimerRef.current); progressTimerRef.current = null }
+            setExtractProgress(0)
+            setNeedsOcr(true)
+            setFileContent('')
+            setExtracting(false)
+          }
+          else {
+            setFileContent(result.content)
+            finishProgress(() => setExtracting(false))
+          }
         })
         .catch((err) => {
+          if (progressTimerRef.current) { clearInterval(progressTimerRef.current); progressTimerRef.current = null }
+          setExtractProgress(0)
           setError(`文件解析失败: ${err instanceof Error ? err.message : err}`)
           setSelectedFile(null)
           setExtracting(false)
         })
     }
     else {
-      // Text files: read directly in browser
       const reader = new FileReader()
       reader.onload = (ev) => { setFileContent(ev.target?.result as string ?? '') }
       reader.onerror = () => setError('读取文件失败')
       reader.readAsText(file)
     }
-  }, [])
+  }, [startProgress, finishProgress])
 
   const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
@@ -174,6 +212,30 @@ export function FileMasking({ sandboxPath }: FileMaskingProps) {
     const file = e.dataTransfer.files?.[0]
     if (file) processFile(file)
   }, [processFile])
+
+  const handleOcrExtract = useCallback(() => {
+    if (!selectedFile) return
+    setError('')
+    setOcrRunning(true)
+    setNeedsOcr(false)
+    setExtracting(true)
+    startProgress(85, 3, 600)
+    extractTextFromFile(selectedFile, 'force')
+      .then((result) => {
+        setFileContent(result.content)
+        finishProgress(() => {
+          setExtracting(false)
+          setOcrRunning(false)
+        })
+      })
+      .catch((err) => {
+        if (progressTimerRef.current) { clearInterval(progressTimerRef.current); progressTimerRef.current = null }
+        setExtractProgress(0)
+        setError(`OCR扫描失败: ${err instanceof Error ? err.message : err}`)
+        setExtracting(false)
+        setOcrRunning(false)
+      })
+  }, [selectedFile, startProgress, finishProgress])
 
   const handleScan = async () => {
     if (!fileContent) return
@@ -287,6 +349,9 @@ export function FileMasking({ sandboxPath }: FileMaskingProps) {
     setStep('upload')
     setError('')
     setExtracting(false)
+    setExtractProgress(0)
+    setNeedsOcr(false)
+    setOcrRunning(false)
   }
 
   // Done state
@@ -339,7 +404,7 @@ export function FileMasking({ sandboxPath }: FileMaskingProps) {
               </div>
               <div>
                 <p className="text-xs text-gray-500">支持格式</p>
-                <p className="text-sm font-medium text-gray-900">MD / TXT / Word / PDF 等</p>
+                <p className="text-sm font-medium text-gray-900">MD / TXT / Word / PDF / 图片 等</p>
               </div>
             </div>
           </div>
@@ -392,39 +457,69 @@ export function FileMasking({ sandboxPath }: FileMaskingProps) {
             className="hidden"
           />
           {selectedFile ? (
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-lg bg-green-100 flex items-center justify-center">
-                  <DocumentIcon className="h-5 w-5 text-green-600" />
+            <div className="space-y-3" onClick={e => e.stopPropagation()}>
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-lg bg-green-100 flex items-center justify-center">
+                    <DocumentIcon className="h-5 w-5 text-green-600" />
+                  </div>
+                  <div>
+                    <p className="text-sm font-medium text-gray-900">{selectedFile.name}</p>
+                    <p className="text-xs text-gray-500">
+                      {(selectedFile.size / 1024).toFixed(1)} KB
+                      {extracting
+                        ? ocrRunning ? ' · OCR扫描中，请耐心等待...' : ' · 正在解析文件内容...'
+                        : needsOcr ? ' · 无可提取文本（扫描件）' : fileContent ? ` · ${fileContent.length} 字符` : ''}
+                    </p>
+                  </div>
                 </div>
-                <div>
-                  <p className="text-sm font-medium text-gray-900">{selectedFile.name}</p>
-                  <p className="text-xs text-gray-500">
-                    {(selectedFile.size / 1024).toFixed(1)} KB
-                    {extracting ? ' · 正在解析文件内容...' : fileContent ? ` · ${fileContent.length} 字符` : ''}
-                  </p>
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => handleReset()}
+                    className="text-xs text-gray-500 hover:text-gray-700 px-2 py-1 rounded hover:bg-gray-100"
+                  >
+                    重新选择
+                  </button>
+                  {needsOcr
+                    ? (
+                      <button
+                        type="button"
+                        onClick={() => handleOcrExtract()}
+                        className="inline-flex items-center gap-1.5 rounded-lg bg-orange-500 px-4 py-2 text-sm font-medium text-white hover:bg-orange-600"
+                      >
+                        <EyeIcon className="h-4 w-4" />OCR扫描
+                      </button>
+                    )
+                    : (
+                      <button
+                        type="button"
+                        onClick={() => handleScan()}
+                        disabled={extracting || !fileContent}
+                        className="inline-flex items-center gap-1.5 rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                      >
+                        {extracting
+                          ? <><div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>{ocrRunning ? 'OCR中...' : '解析中...'}</>
+                          : <><MagnifyingGlassIcon className="h-4 w-4" />智能扫描</>
+                        }
+                      </button>
+                    )}
                 </div>
               </div>
-              <div className="flex items-center gap-2">
-                <button
-                  type="button"
-                  onClick={(e) => { e.stopPropagation(); handleReset() }}
-                  className="text-xs text-gray-500 hover:text-gray-700 px-2 py-1 rounded hover:bg-gray-100"
-                >
-                  重新选择
-                </button>
-                <button
-                  type="button"
-                  onClick={(e) => { e.stopPropagation(); handleScan() }}
-                  disabled={extracting || !fileContent}
-                  className="inline-flex items-center gap-1.5 rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
-                >
-                  {extracting
-                    ? <><div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>解析中...</>
-                    : <><MagnifyingGlassIcon className="h-4 w-4" />智能扫描</>
-                  }
-                </button>
-              </div>
+              {/* Green progress bar */}
+              {extracting && (
+                <div className="w-full bg-gray-200 rounded-full h-2 overflow-hidden">
+                  <div
+                    className="h-full rounded-full transition-all duration-300 ease-out bg-green-500"
+                    style={{ width: `${Math.min(extractProgress, 100)}%` }}
+                  />
+                </div>
+              )}
+              {needsOcr && !extracting && (
+                <div className="text-xs text-orange-600 bg-orange-50 px-3 py-2 rounded-lg">
+                  该PDF为扫描件，无法直接提取文本。点击「OCR扫描」使用光学字符识别提取内容（速度较慢，仅扫描前10页）。
+                </div>
+              )}
             </div>
           ) : (
             <div className="text-center">
@@ -432,7 +527,7 @@ export function FileMasking({ sandboxPath }: FileMaskingProps) {
               <p className="mt-3 text-sm font-medium text-gray-700">
                 {dragging ? '松开鼠标上传文件' : '拖拽文件到此处上传'}
               </p>
-              <p className="mt-1 text-xs text-gray-400">或点击此区域选择文件 · 支持 Markdown、TXT、Word、PDF 等格式</p>
+              <p className="mt-1 text-xs text-gray-400">或点击此区域选择文件 · 支持 Markdown、TXT、Word、PDF、图片(OCR) 等格式</p>
             </div>
           )}
         </div>

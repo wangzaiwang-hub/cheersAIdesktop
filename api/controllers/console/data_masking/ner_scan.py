@@ -90,6 +90,37 @@ def _scan_with_ner(text: str) -> list[dict[str, str]]:
     return results
 
 
+
+
+
+def _ocr_image(data: bytes) -> str:
+    """OCR text from an image using easyocr."""
+    import easyocr
+
+    reader = easyocr.Reader(["ch_sim", "en"], gpu=False)
+    results = reader.readtext(data, detail=0)
+    return "\n".join(results)
+
+
+def _ocr_pdf(data: bytes) -> str:
+    """OCR a scanned PDF by rendering pages to images."""
+    import easyocr
+    import fitz
+
+    reader = easyocr.Reader(["ch_sim", "en"], gpu=False)
+    doc = fitz.open(stream=data, filetype="pdf")
+    pages: list[str] = []
+    for page in doc:
+        pix = page.get_pixmap(dpi=200)
+        img_bytes = pix.tobytes("png")
+        results = reader.readtext(img_bytes, detail=0)
+        text = "\n".join(results)
+        if text.strip():
+            pages.append(text.strip())
+    doc.close()
+    return "\n\n".join(pages)
+
+
 @ner_bp.route("/extract-text", methods=["POST"])
 def extract_text():
     if "file" not in request.files:
@@ -105,18 +136,25 @@ def extract_text():
     if len(raw_bytes) > 20 * 1024 * 1024:
         return {"error": "file too large (max 20MB)"}, 400
 
+    image_exts = (".png", ".jpg", ".jpeg", ".bmp", ".tiff", ".tif", ".webp")
+    use_ocr = request.args.get("ocr", "auto")
+
     try:
         if filename.endswith(".docx"):
             content = _extract_docx(raw_bytes)
         elif filename.endswith(".pdf"):
             content = _extract_pdf(raw_bytes)
+            if not content.strip() or use_ocr == "force":
+                content = _ocr_pdf(raw_bytes)
+        elif any(filename.endswith(ext) for ext in image_exts):
+            content = _ocr_image(raw_bytes)
         else:
             return {"error": f"Unsupported file type: {filename.rsplit('.', 1)[-1]}"}, 400
     except Exception as e:
         return {"error": f"Text extraction failed: {e}"}, 500
 
     if not content.strip():
-        return {"error": "未能从文件中提取到文本内容，可能是扫描件或图片PDF"}, 400
+        return {"error": "未能从文件中提取到文本内容"}, 400
 
     return {
         "content": content,
