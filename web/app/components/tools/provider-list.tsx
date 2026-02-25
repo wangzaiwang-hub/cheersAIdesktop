@@ -4,7 +4,6 @@ import { useQueryState } from 'nuqs'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import Input from '@/app/components/base/input'
-import TabSliderNew from '@/app/components/base/tab-slider-new'
 import Card from '@/app/components/plugins/card'
 import CardMoreInfo from '@/app/components/plugins/card/card-more-info'
 import { useTags } from '@/app/components/plugins/hooks'
@@ -48,12 +47,6 @@ const ProviderList = () => {
   const [activeTab, setActiveTab] = useQueryState('category', {
     defaultValue: 'builtin',
   })
-  const options = [
-    { value: 'builtin', text: t('type.builtIn', { ns: 'tools' }) },
-    { value: 'api', text: t('type.custom', { ns: 'tools' }) },
-    { value: 'workflow', text: t('type.workflow', { ns: 'tools' }) },
-    { value: 'mcp', text: 'MCP' },
-  ]
   const [tagFilterValue, setTagFilterValue] = useState<string[]>([])
   const handleTagsChange = (value: string[]) => {
     setTagFilterValue(value)
@@ -131,19 +124,10 @@ const ProviderList = () => {
           className="relative flex grow flex-col overflow-y-auto bg-background-body"
         >
           <div className={cn(
-            'sticky top-0 z-10 flex flex-wrap items-center justify-between gap-y-2 bg-background-body px-12 pb-2 pt-4 leading-[56px]',
+            'sticky top-0 z-10 flex flex-wrap items-center justify-end gap-y-2 bg-background-body px-12 pb-2 pt-4 leading-[56px]',
             currentProviderId && 'pr-6',
           )}
           >
-            <TabSliderNew
-              value={activeTab}
-              onChange={(state) => {
-                setActiveTab(state)
-                if (state !== activeTab)
-                  setCurrentProviderId(undefined)
-              }}
-              options={options}
-            />
             <div className="flex items-center gap-2">
               {activeTab !== 'mcp' && (
                 <LabelFilter value={tagFilterValue} onChange={handleTagsChange} />

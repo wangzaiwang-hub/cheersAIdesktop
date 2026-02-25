@@ -14,43 +14,39 @@ from flask import Blueprint, request
 
 ner_bp = Blueprint("ner_scan", __name__, url_prefix="/console/api/data-masking/ner")
 
-# jieba POS tag to human-readable category
 POS_LABEL_MAP: dict[str, str] = {
-    "nr": "\u4eba\u540d",
-    "ns": "\u5730\u540d",
-    "nt": "\u673a\u6784\u540d",
-    "nz": "\u4e13\u6709\u540d\u8bcd",
-    "t": "\u65f6\u95f4",
+    "nr": "人名",
+    "ns": "地名",
+    "nt": "机构名",
+    "nz": "专有名词",
+    "t": "时间",
 }
 
-# POS tags we consider potentially sensitive
 SENSITIVE_POS: set[str] = {"nr", "ns", "nt", "nz"}
 
-# Common generic words to exclude
 STOP_WORDS: set[str] = {
-    "\u4e2d\u56fd", "\u4e2d\u534e", "\u56fd\u5bb6", "\u5168\u56fd", "\u672c", "\u5404",
+    "中国", "中华", "国家", "全国", "本", "各",
     "AI", "PDF", "Excel", "Web", "APP", "AR",
-    "\u53d8\u7535\u7ad9", "\u673a\u623f", "\u901a\u4fe1", "\u4fe1\u606f", "\u8fd0\u7ef4", "\u8bbe\u5907",
-    "\u7cfb\u7edf", "\u5e73\u53f0", "\u6280\u672f", "\u6570\u636e", "\u7ba1\u7406", "\u670d\u52a1",
-    "\u7535\u529b", "\u7535\u7f51", "\u4f9b\u7535", "\u8f93\u7535", "\u914d\u7535",
-    "\u6545\u969c", "\u5de1\u68c0", "\u53f0\u8d26", "\u62a5\u544a", "\u5de5\u5355",
-    "\u5149\u7ea4", "\u5149\u7f06", "\u7ea4\u82af", "\u7aef\u53e3", "\u5149\u8def",
-    "\u6a21\u578b", "\u7b97\u6cd5", "\u6df1\u5ea6\u5b66\u4e60", "\u673a\u5668\u5b66\u4e60",
-    "\u65b9\u6848", "\u7814\u7a76", "\u5e94\u7528", "\u9879\u76ee", "\u5de5\u7a0b",
-    "\u4eba\u5458", "\u8d1f\u8d23\u4eba", "\u7ba1\u7406\u5458", "\u4e13\u5bb6",
+    "变电站", "机房", "通信", "信息", "运维", "设备",
+    "系统", "平台", "技术", "数据", "管理", "服务",
+    "电力", "电网", "供电", "输电", "配电",
+    "故障", "巡检", "台账", "报告", "工单",
+    "光纤", "光缆", "纤芯", "端口", "光路",
+    "模型", "算法", "深度学习", "机器学习",
+    "方案", "研究", "应用", "项目", "工程",
+    "人员", "负责人", "管理员", "专家",
 }
 
-# Regex patterns for structured sensitive data
 REGEX_PATTERNS: list[tuple[str, str, str]] = [
-    ("phone", "\u624b\u673a\u53f7", r"1[3-9]\d{9}"),
-    ("email", "\u90ae\u7bb1", r"[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}"),
-    ("id_card", "\u8eab\u4efd\u8bc1\u53f7", r"[1-9]\d{5}(?:18|19|20)\d{2}(?:0[1-9]|1[0-2])(?:0[1-9]|[12]\d|3[01])\d{3}[\dXx]"),
-    ("ip_addr", "IP\u5730\u5740", r"\b(?:\d{1,3}\.){3}\d{1,3}\b"),
-    ("amount", "\u91d1\u989d", r"[\u00a5\uffe5]\s?\d[\d,]*(?:\.\d{1,2})?\s*(?:\u4e07\u5143|\u5143|\u4e07)?"),
+    ("phone", "手机号", r"1[3-9]\d{9}"),
+    ("email", "邮箱", r"[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}"),
+    ("id_card", "身份证号", r"[1-9]\d{5}(?:18|19|20)\d{2}(?:0[1-9]|1[0-2])(?:0[1-9]|[12]\d|3[01])\d{3}[\dXx]"),
+    ("ip_addr", "IP地址", r"\b(?:\d{1,3}\.){3}\d{1,3}\b"),
+    ("amount", "金额", r"[¥￥]\s?\d[\d,]*(?:\.\d{1,2})?\s*(?:万元|元|万)?"),
 ]
 
+
 def _scan_with_regex(text: str) -> list[dict[str, str]]:
-    """Find structured sensitive data via regex."""
     results: list[dict[str, str]] = []
     for entity_type, label, pattern in REGEX_PATTERNS:
         for m in re.finditer(pattern, text):
@@ -64,7 +60,6 @@ def _scan_with_regex(text: str) -> list[dict[str, str]]:
 
 
 def _scan_with_ner(text: str) -> list[dict[str, str]]:
-    """Find named entities via jieba POS tagging."""
     import jieba.posseg as pseg
 
     entity_counter: Counter[tuple[str, str]] = Counter()
@@ -95,13 +90,75 @@ def _scan_with_ner(text: str) -> list[dict[str, str]]:
     return results
 
 
+@ner_bp.route("/extract-text", methods=["POST"])
+def extract_text():
+    if "file" not in request.files:
+        return {"error": "file is required"}, 400
+
+    uploaded = request.files["file"]
+    if not uploaded.filename:
+        return {"error": "filename is required"}, 400
+
+    filename: str = uploaded.filename.lower()
+    raw_bytes: bytes = uploaded.read()
+
+    if len(raw_bytes) > 20 * 1024 * 1024:
+        return {"error": "file too large (max 20MB)"}, 400
+
+    try:
+        if filename.endswith(".docx"):
+            content = _extract_docx(raw_bytes)
+        elif filename.endswith(".pdf"):
+            content = _extract_pdf(raw_bytes)
+        else:
+            return {"error": f"Unsupported file type: {filename.rsplit('.', 1)[-1]}"}, 400
+    except Exception as e:
+        return {"error": f"Text extraction failed: {e}"}, 500
+
+    if not content.strip():
+        return {"error": "未能从文件中提取到文本内容，可能是扫描件或图片PDF"}, 400
+
+    return {
+        "content": content,
+        "file_name": uploaded.filename,
+        "file_type": filename.rsplit(".", 1)[-1],
+        "size": len(content),
+    }
+
+
+def _extract_docx(data: bytes) -> str:
+    import io
+    from docx import Document
+
+    doc = Document(io.BytesIO(data))
+    paragraphs: list[str] = []
+    for para in doc.paragraphs:
+        text = para.text.strip()
+        if text:
+            paragraphs.append(text)
+    for table in doc.tables:
+        for row in table.rows:
+            cells = [cell.text.strip() for cell in row.cells if cell.text.strip()]
+            if cells:
+                paragraphs.append(" | ".join(cells))
+    return "\n".join(paragraphs)
+
+
+def _extract_pdf(data: bytes) -> str:
+    import pypdfium2 as pdfium
+
+    pdf = pdfium.PdfDocument(data)
+    pages: list[str] = []
+    for i in range(len(pdf)):
+        page = pdf[i]
+        text = page.get_textpage().get_text_range()
+        if text.strip():
+            pages.append(text.strip())
+    return "\n\n".join(pages)
+
+
 @ner_bp.route("/scan", methods=["POST"])
 def scan_entities():
-    """Scan text for sensitive entities using regex + jieba NER.
-
-    Request body: {"content": "...text..."}
-    Returns: {"entities": [...]}
-    """
     data = request.get_json(silent=True)
     if not data or not data.get("content"):
         return {"error": "content is required"}, 400

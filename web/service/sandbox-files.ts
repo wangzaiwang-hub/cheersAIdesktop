@@ -94,3 +94,18 @@ export async function scanEntities(content: string): Promise<NerEntity[]> {
   const data = await res.json()
   return data.entities || []
 }
+
+/** Extract text from binary files (docx, pdf) via backend */
+export async function extractTextFromFile(file: File): Promise<{ content: string; file_name: string; file_type: string }> {
+  const formData = new FormData()
+  formData.append('file', file)
+  const res = await fetch(apiUrl(`${NER_API_BASE}/extract-text`), {
+    method: 'POST',
+    body: formData,
+  })
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}))
+    throw new Error(err.error || `Text extraction failed: ${res.status}`)
+  }
+  return res.json()
+}

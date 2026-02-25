@@ -14,10 +14,15 @@ import {
   ShieldCheckIcon,
   ClockIcon,
 } from '@heroicons/react/24/outline'
-import { saveSandboxFile } from '@/service/sandbox-files'
-import { scanEntities } from '@/service/sandbox-files'
+import { saveSandboxFile, scanEntities, extractTextFromFile } from '@/service/sandbox-files'
 import type { NerEntity } from '@/service/sandbox-files'
 
+// Text-based formats readable in browser
+const TEXT_EXTENSIONS = new Set(['.md', '.txt', '.csv', '.json', '.xml', '.yaml', '.yml', '.log', '.conf', '.ini', '.toml', '.html', '.htm', '.css', '.js', '.ts', '.py', '.java', '.sql', '.sh', '.bat'])
+// Binary formats requiring backend extraction
+const BINARY_EXTENSIONS = new Set(['.docx', '.pdf'])
+const ALL_EXTENSIONS = [...TEXT_EXTENSIONS, ...BINARY_EXTENSIONS]
+const ACCEPT_STRING = ALL_EXTENSIONS.join(',')
 interface FileMaskingProps {
   sandboxPath: string
 }
@@ -34,8 +39,27 @@ interface ManualReplacement {
 
 function getMaskedFileName(originalName: string): string {
   const dotIdx = originalName.lastIndexOf('.')
-  if (dotIdx === -1) return `${originalName}.masked`
-  return `${originalName.substring(0, dotIdx)}.masked${originalName.substring(dotIdx)}`
+  if (dotIdx === -1) return `${originalName}.masked.txt`
+  const ext = originalName.substring(dotIdx)
+  const base = originalName.substring(0, dotIdx)
+  // Binary formats get .masked.txt since we output plain text
+  if (BINARY_EXTENSIONS.has(ext.toLowerCase()))
+    return `${base}.masked.txt`
+  return `${base}.masked${ext}`
+}
+
+function getFileExtension(name: string): string {
+  const dotIdx = name.lastIndexOf('.')
+  return dotIdx === -1 ? '' : name.substring(dotIdx).toLowerCase()
+}
+
+function isSupportedFile(name: string): boolean {
+  const ext = getFileExtension(name)
+  return TEXT_EXTENSIONS.has(ext) || BINARY_EXTENSIONS.has(ext)
+}
+
+function isBinaryFile(name: string): boolean {
+  return BINARY_EXTENSIONS.has(getFileExtension(name))
 }
 
 function escapeRegex(str: string): string {
@@ -85,13 +109,14 @@ export function FileMasking({ sandboxPath }: FileMaskingProps) {
   const [matchCount, setMatchCount] = useState(0)
   const [error, setError] = useState('')
   const [dragging, setDragging] = useState(false)
+  const [extracting, setExtracting] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
   const dropRef = useRef<HTMLDivElement>(null)
 
   const processFile = useCallback((file: File) => {
     setError('')
-    if (!file.name.endsWith('.md')) {
-      setError('目前仅支持 .md (Markdown) 文件')
+    if (!isSupportedFile(file.name)) {
+      setError(`不支持的文件格式。支持: ${ALL_EXTENSIONS.join(', ')}`)
       return
     }
     setSelectedFile(file)
@@ -100,10 +125,29 @@ export function FileMasking({ sandboxPath }: FileMaskingProps) {
     setManualReplacements([])
     setPreview('')
     setMaskedContent('')
-    const reader = new FileReader()
-    reader.onload = (ev) => { setFileContent(ev.target?.result as string ?? '') }
-    reader.onerror = () => setError('读取文件失败')
-    reader.readAsText(file)
+
+    if (isBinaryFile(file.name)) {
+      // Binary files: extract text via backend
+      setFileContent('')
+      setExtracting(true)
+      extractTextFromFile(file)
+        .then((result) => {
+          setFileContent(result.content)
+          setExtracting(false)
+        })
+        .catch((err) => {
+          setError(`文件解析失败: ${err instanceof Error ? err.message : err}`)
+          setSelectedFile(null)
+          setExtracting(false)
+        })
+    }
+    else {
+      // Text files: read directly in browser
+      const reader = new FileReader()
+      reader.onload = (ev) => { setFileContent(ev.target?.result as string ?? '') }
+      reader.onerror = () => setError('读取文件失败')
+      reader.readAsText(file)
+    }
   }, [])
 
   const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -242,6 +286,7 @@ export function FileMasking({ sandboxPath }: FileMaskingProps) {
     setMatchCount(0)
     setStep('upload')
     setError('')
+    setExtracting(false)
   }
 
   // Done state
@@ -294,7 +339,7 @@ export function FileMasking({ sandboxPath }: FileMaskingProps) {
               </div>
               <div>
                 <p className="text-xs text-gray-500">支持格式</p>
-                <p className="text-sm font-medium text-gray-900">Markdown (.md)</p>
+                <p className="text-sm font-medium text-gray-900">MD / TXT / Word / PDF 等</p>
               </div>
             </div>
           </div>
@@ -342,7 +387,7 @@ export function FileMasking({ sandboxPath }: FileMaskingProps) {
           <input
             ref={fileInputRef}
             type="file"
-            accept=".md"
+            accept={ACCEPT_STRING}
             onChange={handleFileSelect}
             className="hidden"
           />
@@ -354,7 +399,10 @@ export function FileMasking({ sandboxPath }: FileMaskingProps) {
                 </div>
                 <div>
                   <p className="text-sm font-medium text-gray-900">{selectedFile.name}</p>
-                  <p className="text-xs text-gray-500">{(selectedFile.size / 1024).toFixed(1)} KB · {fileContent.length} 字符</p>
+                  <p className="text-xs text-gray-500">
+                    {(selectedFile.size / 1024).toFixed(1)} KB
+                    {extracting ? ' · 正在解析文件内容...' : fileContent ? ` · ${fileContent.length} 字符` : ''}
+                  </p>
                 </div>
               </div>
               <div className="flex items-center gap-2">
@@ -368,10 +416,13 @@ export function FileMasking({ sandboxPath }: FileMaskingProps) {
                 <button
                   type="button"
                   onClick={(e) => { e.stopPropagation(); handleScan() }}
-                  className="inline-flex items-center gap-1.5 rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700"
+                  disabled={extracting || !fileContent}
+                  className="inline-flex items-center gap-1.5 rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
                 >
-                  <MagnifyingGlassIcon className="h-4 w-4" />
-                  智能扫描
+                  {extracting
+                    ? <><div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>解析中...</>
+                    : <><MagnifyingGlassIcon className="h-4 w-4" />智能扫描</>
+                  }
                 </button>
               </div>
             </div>
@@ -379,9 +430,9 @@ export function FileMasking({ sandboxPath }: FileMaskingProps) {
             <div className="text-center">
               <ArrowUpTrayIcon className={`mx-auto h-10 w-10 ${dragging ? 'text-blue-500' : 'text-gray-300'}`} />
               <p className="mt-3 text-sm font-medium text-gray-700">
-                {dragging ? '松开鼠标上传文件' : '拖拽 Markdown 文件到此处'}
+                {dragging ? '松开鼠标上传文件' : '拖拽文件到此处上传'}
               </p>
-              <p className="mt-1 text-xs text-gray-400">或点击此区域选择文件 · 仅支持 .md 格式</p>
+              <p className="mt-1 text-xs text-gray-400">或点击此区域选择文件 · 支持 Markdown、TXT、Word、PDF 等格式</p>
             </div>
           )}
         </div>
@@ -545,7 +596,7 @@ export function FileMasking({ sandboxPath }: FileMaskingProps) {
           <div className="grid grid-cols-2 gap-3">
             <div className="flex items-start gap-2">
               <span className="flex-shrink-0 w-5 h-5 rounded-full bg-blue-100 text-blue-600 text-xs flex items-center justify-center font-medium">1</span>
-              <p className="text-xs text-gray-500">上传或拖拽 Markdown 文件到上方区域</p>
+              <p className="text-xs text-gray-500">上传或拖拽文件到上方区域（支持多种格式）</p>
             </div>
             <div className="flex items-start gap-2">
               <span className="flex-shrink-0 w-5 h-5 rounded-full bg-blue-100 text-blue-600 text-xs flex items-center justify-center font-medium">2</span>

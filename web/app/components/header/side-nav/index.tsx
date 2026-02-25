@@ -2,6 +2,7 @@
 
 import {
   RiApps2Line,
+  RiCodeLine,
   RiDashboardFill,
   RiDashboardLine,
   RiDatabase2Fill,
@@ -12,25 +13,32 @@ import {
   RiFolderShield2Line,
   RiHammerFill,
   RiHammerLine,
+  RiArrowDownSLine,
+  RiArrowRightSLine,
+  RiLogoutBoxRLine,
   RiMenuFoldLine,
   RiMenuUnfoldLine,
   RiMessage3Line,
   RiPlanetFill,
   RiPlanetLine,
+  RiPlugLine,
   RiRobot3Line,
   RiSettings4Line,
   RiShieldCheckFill,
   RiShieldCheckLine,
+  RiToolsLine,
 } from '@remixicon/react'
 import Link from 'next/link'
+import { useRouter } from 'next/navigation'
 import { useSearchParams, useSelectedLayoutSegment } from 'next/navigation'
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useAppContext } from '@/context/app-context'
 import { Group } from '@/app/components/base/icons/src/vender/other'
 import { cn } from '@/utils/classnames'
 import AccountDropdown from '../account-dropdown'
 import EnvNav from '../env-nav'
 import PluginsNav from '../plugins-nav'
+import { useLogout } from '@/service/use-common'
 
 interface SubItemConfig {
   id: string
@@ -56,7 +64,15 @@ interface NavItemConfig {
 const SideNav = () => {
   const segment = useSelectedLayoutSegment()
   const searchParams = useSearchParams()
-  const { isCurrentWorkspaceEditor, isCurrentWorkspaceDatasetOperator } = useAppContext()
+  const { isCurrentWorkspaceEditor, isCurrentWorkspaceDatasetOperator, userProfile } = useAppContext()
+  const router = useRouter()
+  const { mutateAsync: logout } = useLogout()
+
+  const handleLogout = async () => {
+    await logout()
+    localStorage.removeItem('setup_status')
+    router.push('/signin')
+  }
   const [collapsed, setCollapsed] = useState(() => {
     if (typeof window !== 'undefined')
       return localStorage.getItem('side_nav_collapsed') === 'true'
@@ -71,6 +87,20 @@ const SideNav = () => {
     })
   }
 
+  const [expandedItems, setExpandedItems] = useState<Set<string>>(new Set())
+
+  const toggleExpand = (id: string, e: React.MouseEvent) => {
+    e.preventDefault()
+    e.stopPropagation()
+    setExpandedItems((prev) => {
+      const next = new Set(prev)
+      if (next.has(id))
+        next.delete(id)
+      else
+        next.add(id)
+      return next
+    })
+  }
 
   // 工作台子菜单
   const appsChildren: SubItemConfig[] = [
@@ -146,6 +176,14 @@ const SideNav = () => {
     })
   }
 
+  // 工具子菜单
+  const toolsChildren: SubItemConfig[] = [
+    { id: 'builtin', href: '/tools?category=builtin', icon: <RiToolsLine className="h-4 w-4" />, label: '工具' },
+    { id: 'api', href: '/tools?category=api', icon: <RiCodeLine className="h-4 w-4" />, label: '自定义' },
+    { id: 'workflow', href: '/tools?category=workflow', icon: <RiExchange2Line className="h-4 w-4" />, label: '工作流' },
+    { id: 'mcp', href: '/tools?category=mcp', icon: <RiPlugLine className="h-4 w-4" />, label: 'MCP' },
+  ]
+
   // 工具
   if (!isCurrentWorkspaceDatasetOperator) {
     navItems.push({
@@ -155,8 +193,25 @@ const SideNav = () => {
       activeIcon: <RiHammerFill className="h-5 w-5" />,
       label: '工具',
       segments: ['tools'],
+      children: toolsChildren,
+      childParam: 'category',
+      childDefault: 'builtin',
     })
   }
+
+  // Auto-expand the active nav item on mount / segment change
+  useEffect(() => {
+    const activeItem = navItems.find(item => item.segments.includes(segment ?? ''))
+    if (activeItem?.children?.length) {
+      setExpandedItems((prev) => {
+        if (prev.has(activeItem.id)) return prev
+        const next = new Set(prev)
+        next.add(activeItem.id)
+        return next
+      })
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [segment])
 
   return (
     <div
@@ -167,13 +222,13 @@ const SideNav = () => {
     >
       {/* Logo + tagline + collapse */}
       <div className={cn(
-        'flex items-center shrink-0',
+        'flex items-center shrink-0 border-b border-white/10',
         collapsed ? 'flex-col gap-1 px-2 py-4' : 'justify-between px-4 py-4',
       )}>
-        <Link href="/apps" className="flex items-center gap-3 shrink-0">
+        <Link href="/apps" className="flex items-center gap-4 shrink-0">
           <div className={cn(
             'rounded-xl border border-white/20 overflow-hidden shrink-0',
-            collapsed ? 'w-8 h-8' : 'w-10 h-10',
+            collapsed ? 'w-8 h-8' : 'w-12 h-12',
           )}>
             <img
               src="/logo/CheersAI.png"
@@ -201,36 +256,53 @@ const SideNav = () => {
       </div>
 
       {/* Nav items */}
-      <nav className="flex-1 flex flex-col gap-0.5 px-3 py-2 overflow-y-auto">
+      <nav className="flex-1 flex flex-col gap-0.5 px-3 py-2 overflow-y-auto scrollbar-hide">
         {navItems.map((item) => {
           const isActive = item.segments.includes(segment ?? '')
           const hasChildren = item.children && item.children.length > 0
-          const showChildren = isActive && hasChildren && !collapsed
+          const isExpanded = expandedItems.has(item.id)
+          const showChildren = isExpanded && hasChildren && !collapsed
 
           return (
             <div key={item.id}>
-              <Link
-                href={item.href}
-                title={collapsed ? item.label : undefined}
-                className={cn(
-                  'flex items-center gap-3 rounded-xl transition-colors',
-                  collapsed ? 'justify-center px-0 py-3' : 'px-4 py-3',
-                  isActive && !showChildren
-                    ? 'bg-[#2563eb] text-white font-medium'
-                    : isActive
-                      ? 'bg-white/10 text-white font-medium'
-                      : 'text-white/70 hover:bg-white/5 hover:text-white',
-                )}
-              >
-                <span className="shrink-0">
-                  {isActive ? item.activeIcon : item.icon}
-                </span>
-                {!collapsed && (
-                  <span className="text-sm truncate">
-                    {item.label}
+              <div className="relative flex items-center">
+                <Link
+                  href={item.href}
+                  title={collapsed ? item.label : undefined}
+                  className={cn(
+                    'flex items-center gap-3 rounded-xl transition-colors flex-1 min-w-0',
+                    collapsed ? 'justify-center px-0 py-3' : 'px-4 py-3',
+                    isActive && !showChildren
+                      ? 'bg-[#2563eb] text-white font-medium'
+                      : isActive
+                        ? 'bg-white/10 text-white font-medium'
+                        : 'text-white/70 hover:bg-white/5 hover:text-white',
+                  )}
+                >
+                  <span className="shrink-0">
+                    {isActive ? item.activeIcon : item.icon}
                   </span>
+                  {!collapsed && (
+                    <span className="text-sm truncate">
+                      {item.label}
+                    </span>
+                  )}
+                </Link>
+                {hasChildren && !collapsed && (
+                  <button
+                    onClick={e => toggleExpand(item.id, e)}
+                    className={cn(
+                      'absolute right-1 p-1 rounded-md transition-colors',
+                      'text-white/40 hover:text-white/80 hover:bg-white/10',
+                    )}
+                    title={isExpanded ? '收起' : '展开'}
+                  >
+                    {isExpanded
+                      ? <RiArrowDownSLine className="w-4 h-4" />
+                      : <RiArrowRightSLine className="w-4 h-4" />}
+                  </button>
                 )}
-              </Link>
+              </div>
               {/* Sub-items */}
               {showChildren && (
                 <div className="mt-0.5 ml-4 flex flex-col gap-0.5">
@@ -269,7 +341,20 @@ const SideNav = () => {
               <div className="side-nav-plugins-wrap">
                 <PluginsNav />
               </div>
-              <AccountDropdown />
+              <div className="flex items-center gap-3 px-2 py-1.5 rounded-lg hover:bg-white/5 transition-colors">
+                <AccountDropdown />
+                <div className="flex flex-col min-w-0 flex-1">
+                  <span className="text-white/90 text-sm font-medium truncate">{userProfile.name}</span>
+                  <span className="text-white/50 text-xs truncate">{userProfile.email}</span>
+                </div>
+                <button
+                  onClick={handleLogout}
+                  className="shrink-0 p-1.5 rounded-md text-white/30 hover:text-white/80 hover:bg-white/10 transition-colors"
+                  title="退出登录"
+                >
+                  <RiLogoutBoxRLine className="w-4 h-4" />
+                </button>
+              </div>
             </>
           )
           : (
@@ -284,6 +369,13 @@ const SideNav = () => {
           )}
       </div>
       <style jsx global>{`
+        .scrollbar-hide {
+          -ms-overflow-style: none;
+          scrollbar-width: none;
+        }
+        .scrollbar-hide::-webkit-scrollbar {
+          display: none;
+        }
         .side-nav-plugins-wrap .plugins-nav-button > div {
           color: rgba(255,255,255,0.7) !important;
           border-color: transparent !important;
