@@ -15,6 +15,7 @@ import {
   RiHammerLine,
   RiArrowDownSLine,
   RiArrowRightSLine,
+  RiArrowGoBackLine,
   RiLogoutBoxRLine,
   RiMenuFoldLine,
   RiMenuUnfoldLine,
@@ -132,6 +133,7 @@ const SideNav = () => {
   // 脱敏沙箱子菜单
   const dataMaskingChildren: SubItemConfig[] = [
     { id: 'mask', href: '/data-masking?tab=mask', icon: <RiFileShield2Line className="h-4 w-4" />, label: '文件脱敏' },
+    { id: 'restore', href: '/data-masking?tab=restore', icon: <RiArrowGoBackLine className="h-4 w-4" />, label: '脱敏还原' },
     { id: 'rules', href: '/data-masking?tab=rules', icon: <RiShieldCheckLine className="h-4 w-4" />, label: '脱敏规则' },
     { id: 'files', href: '/data-masking?tab=files', icon: <RiFolderShield2Line className="h-4 w-4" />, label: '文件管理' },
     { id: 'sandbox', href: '/data-masking?tab=sandbox', icon: <RiSettings4Line className="h-4 w-4" />, label: '沙箱配置' },

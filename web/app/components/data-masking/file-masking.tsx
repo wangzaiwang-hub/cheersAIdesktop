@@ -49,6 +49,12 @@ function getMaskedFileName(originalName: string): string {
   return `${base}.masked${ext}`
 }
 
+function getMappingFileName(originalName: string): string {
+  const dotIdx = originalName.lastIndexOf('.')
+  const base = dotIdx === -1 ? originalName : originalName.substring(0, dotIdx)
+  return `${base}.mapping.json`
+}
+
 function getFileExtension(name: string): string {
   const dotIdx = name.lastIndexOf('.')
   return dotIdx === -1 ? '' : name.substring(dotIdx).toLowerCase()
@@ -305,13 +311,59 @@ export function FileMasking({ sandboxPath }: FileMaskingProps) {
     const maskedFileName = getMaskedFileName(selectedFile.name)
     const messages: string[] = []
 
+    // Build mapping rules for reverse masking
+    const mappingRules: { original: string; replacement: string; label: string; type: string; count: string }[] = []
+    for (const e of entities) {
+      if (e.checked) {
+        mappingRules.push({
+          original: e.text,
+          replacement: e.replacement,
+          label: e.label,
+          type: e.type,
+          count: e.count,
+        })
+      }
+    }
+    for (const mr of manualReplacements) {
+      if (mr.find.length > 0) {
+        const cnt = fileContent.split(mr.find).length - 1
+        mappingRules.push({
+          original: mr.find,
+          replacement: mr.replace,
+          label: '手动替换',
+          type: 'manual',
+          count: String(cnt),
+        })
+      }
+    }
+
+    const mappingData = {
+      version: '1.0',
+      source_file: selectedFile.name,
+      masked_file: maskedFileName,
+      created_at: new Date().toISOString(),
+      total_replacements: matchCount,
+      rules: mappingRules,
+    }
+    const mappingJson = JSON.stringify(mappingData, null, 2)
+    const mappingFileName = getMappingFileName(selectedFile.name)
+
     if (sandboxPath) {
+      // Save masked file
       try {
         const result = await saveSandboxFile(sandboxPath, maskedFileName, maskedContent)
-        messages.push(`已保存到 ${result.file_path}`)
+        messages.push(`脱敏文件已保存到 ${result.file_path}`)
       }
       catch (saveErr) {
-        messages.push(`保存失败: ${saveErr instanceof Error ? saveErr.message : saveErr}`)
+        messages.push(`脱敏文件保存失败: ${saveErr instanceof Error ? saveErr.message : saveErr}`)
+      }
+      // Save mapping rules
+      try {
+        await saveSandboxFile(sandboxPath, mappingFileName, mappingJson)
+        messages.push(`映射规则已保存`)
+      }
+      catch (saveErr) {
+        messages.push(`映射规则保存失败: ${saveErr instanceof Error ? saveErr.message : saveErr}`)
       }
     }
 
@@ -363,6 +415,9 @@ export function FileMasking({ sandboxPath }: FileMaskingProps) {
         <p className="mt-1 text-sm text-gray-500">已替换 {matchCount} 处敏感数据</p>
         <p className="mt-1 text-xs text-gray-400">
           文件: {selectedFile ? getMaskedFileName(selectedFile.name) : ''} → {sandboxPath}
+        </p>
+        <p className="mt-1 text-xs text-gray-400">
+          映射规则: {selectedFile ? getMappingFileName(selectedFile.name) : ''} (可用于反脱敏还原)
         </p>
         <div className="mt-6 flex items-center justify-center gap-3">
           <button onClick={handleReset}

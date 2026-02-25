@@ -1,0 +1,378 @@
+'use client'
+
+import { useState, useRef, useCallback } from 'react'
+import {
+  ArrowUpTrayIcon,
+  DocumentIcon,
+  EyeIcon,
+  PlayIcon,
+  CheckCircleIcon,
+  ArrowPathIcon,
+} from '@heroicons/react/24/outline'
+import { saveSandboxFile } from '@/service/sandbox-files'
+
+interface MappingRule {
+  original: string
+  replacement: string
+  label: string
+  type: string
+  count: string
+}
+
+interface MappingData {
+  version: string
+  source_file: string
+  masked_file: string
+  created_at: string
+  total_replacements: number
+  rules: MappingRule[]
+}
+
+interface FileRestoreProps {
+  sandboxPath: string
+}
+
+function getRestoredFileName(maskedName: string): string {
+  // report.masked.txt -> report.restored.txt
+  // report.masked.md -> report.restored.md
+  return maskedName.replace('.masked', '.restored')
+}
+
+function applyRestore(content: string, rules: MappingRule[]): { restored: string; count: number } {
+  let restored = content
+  let totalCount = 0
+  // Sort by replacement length descending to avoid partial matches
+  const sorted = [...rules].sort((a, b) => b.replacement.length - a.replacement.length)
+  for (const rule of sorted) {
+    if (!rule.replacement) continue
+    const escaped = rule.replacement.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+    const regex = new RegExp(escaped, 'g')
+    let matchCount = 0
+    restored = restored.replace(regex, () => { matchCount++; return rule.original })
+    totalCount += matchCount
+  }
+  return { restored, count: totalCount }
+}
+
+type Step = 'upload' | 'confirm' | 'preview' | 'done'
+
+export function FileRestore({ sandboxPath }: FileRestoreProps) {
+  const [step, setStep] = useState<Step>('upload')
+  const [maskedFile, setMaskedFile] = useState<File | null>(null)
+  const [maskedContent, setMaskedContent] = useState('')
+  const [mappingData, setMappingData] = useState<MappingData | null>(null)
+  const [preview, setPreview] = useState('')
+  const [restoredContent, setRestoredContent] = useState('')
+  const [matchCount, setMatchCount] = useState(0)
+  const [error, setError] = useState('')
+  const [dragging, setDragging] = useState(false)
+  const maskedInputRef = useRef<HTMLInputElement>(null)
+  const mappingInputRef = useRef<HTMLInputElement>(null)
+  const dropRef = useRef<HTMLDivElement>(null)
+
+  const handleMaskedFile = useCallback((file: File) => {
+    setError('')
+    const reader = new FileReader()
+    reader.onload = (ev) => {
+      setMaskedContent(ev.target?.result as string ?? '')
+      setMaskedFile(file)
+    }
+    reader.onerror = () => setError('读取脱敏文件失败')
+    reader.readAsText(file)
+  }, [])
+
+  const handleMappingFile = useCallback((file: File) => {
+    setError('')
+    if (!file.name.endsWith('.mapping.json')) {
+      setError('请选择 .mapping.json 映射规则文件')
+      return
+    }
+    const reader = new FileReader()
+    reader.onload = (ev) => {
+      try {
+        const data = JSON.parse(ev.target?.result as string) as MappingData
+        if (!data.rules || !Array.isArray(data.rules)) {
+          setError('映射文件格式错误：缺少 rules 字段')
+          return
+        }
+        setMappingData(data)
+        setStep('confirm')
+      }
+      catch {
+        setError('映射文件解析失败，请确认是有效的 JSON 文件')
+      }
+    }
+    reader.onerror = () => setError('读取映射文件失败')
+    reader.readAsText(file)
+  }, [])
+
+  const handleDrop = useCallback((e: React.DragEvent) => {
+    e.preventDefault()
+    e.stopPropagation()
+    setDragging(false)
+    const files = Array.from(e.dataTransfer.files)
+    for (const f of files) {
+      if (f.name.endsWith('.mapping.json'))
+        handleMappingFile(f)
+      else
+        handleMaskedFile(f)
+    }
+  }, [handleMaskedFile, handleMappingFile])
+
+  const handlePreview = () => {
+    if (!maskedContent || !mappingData) return
+    const { restored, count } = applyRestore(maskedContent, mappingData.rules)
+    setRestoredContent(restored)
+    setMatchCount(count)
+    setPreview(restored.length > 3000 ? restored.substring(0, 3000) + '\n\n... (已截断)' : restored)
+    setStep('preview')
+  }
+
+  const handleExecute = async () => {
+    if (!maskedFile || !restoredContent) return
+    setError('')
+    const restoredFileName = getRestoredFileName(maskedFile.name)
+    const messages: string[] = []
+
+    if (sandboxPath) {
+      try {
+        const result = await saveSandboxFile(sandboxPath, restoredFileName, restoredContent)
+        messages.push(`已保存到 ${result.file_path}`)
+      }
+      catch (saveErr) {
+        messages.push(`保存失败: ${saveErr instanceof Error ? saveErr.message : saveErr}`)
+      }
+    }
+
+    try {
+      const blob = new Blob([restoredContent], { type: 'text/plain;charset=utf-8' })
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = restoredFileName
+      document.body.appendChild(a)
+      a.click()
+      document.body.removeChild(a)
+      URL.revokeObjectURL(url)
+      messages.push('浏览器下载已触发')
+    }
+    catch {
+      messages.push('浏览器下载失败')
+    }
+
+    if (messages.some(m => m.includes('失败')))
+      setError(messages.join('；'))
+    else
+      setStep('done')
+  }
+
+  const handleReset = () => {
+    setMaskedFile(null)
+    setMaskedContent('')
+    setMappingData(null)
+    setPreview('')
+    setRestoredContent('')
+    setMatchCount(0)
+    setStep('upload')
+    setError('')
+  }
+
+  if (step === 'done') {
+    return (
+      <div className="text-center py-16">
+        <CheckCircleIcon className="mx-auto h-14 w-14 text-green-500" />
+        <h3 className="mt-3 text-base font-medium text-gray-900">还原完成</h3>
+        <p className="mt-1 text-sm text-gray-500">已还原 {matchCount} 处脱敏数据</p>
+        <p className="mt-1 text-xs text-gray-400">
+          文件: {maskedFile ? getRestoredFileName(maskedFile.name) : ''} → {sandboxPath}
+        </p>
+        <div className="mt-6 flex items-center justify-center gap-3">
+          <button onClick={handleReset}
+            className="inline-flex items-center px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700">
+            继续还原其他文件
+          </button>
+        </div>
+      </div>
+    )
+  }
+
+  return (
+    <div className="space-y-6">
+      {error && (
+        <div className="text-sm text-red-600 bg-red-50 px-4 py-3 rounded-lg">{error}</div>
+      )}
+
+      {/* Upload area */}
+      {step === 'upload' && (
+        <>
+          {/* Step 1: Upload masked file */}
+          <div
+            ref={dropRef}
+            onDragOver={(e) => { e.preventDefault(); e.stopPropagation(); setDragging(true) }}
+            onDragLeave={(e) => { e.preventDefault(); e.stopPropagation(); setDragging(false) }}
+            onDrop={handleDrop}
+            className={`rounded-xl border-2 border-dashed transition-all p-8 ${
+              dragging ? 'border-blue-400 bg-blue-50' : 'border-gray-200 bg-white hover:border-gray-300'
+            }`}
+          >
+            <div className="space-y-4">
+              {/* Masked file */}
+              <div className="flex items-center gap-4">
+                <div className="w-10 h-10 rounded-lg bg-blue-50 flex items-center justify-center shrink-0">
+                  <DocumentIcon className="h-5 w-5 text-blue-600" />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-medium text-gray-700">脱敏文件</p>
+                  {maskedFile
+                    ? <p className="text-xs text-green-600 truncate">{maskedFile.name} ({maskedContent.length} 字符)</p>
+                    : <p className="text-xs text-gray-400">选择需要还原的 .masked 文件</p>
+                  }
+                </div>
+                <button
+                  type="button"
+                  onClick={() => maskedInputRef.current?.click()}
+                  className="text-xs text-blue-600 hover:text-blue-700 px-3 py-1.5 rounded-lg border border-blue-200 hover:bg-blue-50"
+                >
+                  {maskedFile ? '重新选择' : '选择文件'}
+                </button>
+                <input ref={maskedInputRef} type="file" className="hidden"
+                  onChange={(e) => { const f = e.target.files?.[0]; if (f) handleMaskedFile(f) }} />
+              </div>
+
+              {/* Mapping file */}
+              <div className="flex items-center gap-4">
+                <div className="w-10 h-10 rounded-lg bg-orange-50 flex items-center justify-center shrink-0">
+                  <ArrowPathIcon className="h-5 w-5 text-orange-600" />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-medium text-gray-700">映射规则文件</p>
+                  {mappingData
+                    ? <p className="text-xs text-green-600">{mappingData.source_file} → {mappingData.rules.length} 条规则</p>
+                    : <p className="text-xs text-gray-400">选择对应的 .mapping.json 文件</p>
+                  }
+                </div>
+                <button
+                  type="button"
+                  onClick={() => mappingInputRef.current?.click()}
+                  className="text-xs text-blue-600 hover:text-blue-700 px-3 py-1.5 rounded-lg border border-blue-200 hover:bg-blue-50"
+                >
+                  {mappingData ? '重新选择' : '选择文件'}
+                </button>
+                <input ref={mappingInputRef} type="file" accept=".json" className="hidden"
+                  onChange={(e) => { const f = e.target.files?.[0]; if (f) handleMappingFile(f) }} />
+              </div>
+
+              {!maskedFile && !mappingData && (
+                <div className="text-center pt-2">
+                  <ArrowUpTrayIcon className="mx-auto h-8 w-8 text-gray-300" />
+                  <p className="mt-2 text-xs text-gray-400">也可以将两个文件一起拖拽到此处</p>
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* Usage tips */}
+          {!maskedFile && (
+            <div className="bg-white rounded-xl border border-gray-100 p-5">
+              <h4 className="text-sm font-medium text-gray-700 mb-3">使用说明</h4>
+              <div className="grid grid-cols-2 gap-3">
+                <div className="flex items-start gap-2">
+                  <span className="flex-shrink-0 w-5 h-5 rounded-full bg-blue-100 text-blue-600 text-xs flex items-center justify-center font-medium">1</span>
+                  <p className="text-xs text-gray-500">上传脱敏后的文件（.masked.txt / .masked.md 等）</p>
+                </div>
+                <div className="flex items-start gap-2">
+                  <span className="flex-shrink-0 w-5 h-5 rounded-full bg-blue-100 text-blue-600 text-xs flex items-center justify-center font-medium">2</span>
+                  <p className="text-xs text-gray-500">上传对应的映射规则文件（.mapping.json）</p>
+                </div>
+                <div className="flex items-start gap-2">
+                  <span className="flex-shrink-0 w-5 h-5 rounded-full bg-blue-100 text-blue-600 text-xs flex items-center justify-center font-medium">3</span>
+                  <p className="text-xs text-gray-500">确认映射规则，预览还原效果</p>
+                </div>
+                <div className="flex items-start gap-2">
+                  <span className="flex-shrink-0 w-5 h-5 rounded-full bg-blue-100 text-blue-600 text-xs flex items-center justify-center font-medium">4</span>
+                  <p className="text-xs text-gray-500">执行还原，文件自动保存到沙箱并下载</p>
+                </div>
+              </div>
+            </div>
+          )}
+        </>
+      )}
+
+      {/* Confirm rules */}
+      {step === 'confirm' && mappingData && (
+        <>
+          <div className="flex items-center justify-between bg-white rounded-lg border border-gray-100 px-4 py-3">
+            <div className="flex items-center gap-2 text-sm text-gray-600">
+              <DocumentIcon className="h-4 w-4 text-gray-400" />
+              <span className="font-medium">{maskedFile?.name}</span>
+              <span className="text-gray-400">·</span>
+              <span className="text-gray-400">来源: {mappingData.source_file}</span>
+              <span className="text-gray-400">·</span>
+              <span className="text-gray-400">{mappingData.created_at ? new Date(mappingData.created_at).toLocaleString('zh-CN') : ''}</span>
+            </div>
+            <button onClick={handleReset} className="text-xs text-gray-500 hover:text-gray-700">重新选择</button>
+          </div>
+
+          <div className="bg-white rounded-xl border border-gray-100 p-4">
+            <div className="flex items-center gap-2 mb-3">
+              <ArrowPathIcon className="h-4 w-4 text-orange-600" />
+              <label className="text-sm font-medium text-gray-700">
+                映射规则 ({mappingData.rules.length} 条)
+              </label>
+            </div>
+            <div className="space-y-1 max-h-72 overflow-y-auto">
+              {mappingData.rules.map((rule, idx) => (
+                <div key={idx} className="flex items-center gap-3 p-2 border border-gray-200 rounded-md text-sm">
+                  <span className="text-xs px-1.5 py-0.5 rounded bg-gray-100 text-gray-500 shrink-0">{rule.label}</span>
+                  <span className="text-blue-600 font-mono text-xs">{rule.replacement}</span>
+                  <span className="text-xs text-gray-300">→</span>
+                  <span className="text-gray-900 font-medium text-xs">{rule.original}</span>
+                  <span className="text-xs text-gray-400 ml-auto">×{rule.count}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        </>
+      )}
+
+      {/* Preview */}
+      {step === 'preview' && preview && (
+        <div className="bg-white rounded-xl border border-gray-100 p-4">
+          <div className="flex items-center justify-between mb-3">
+            <div className="flex items-center gap-2">
+              <EyeIcon className="h-4 w-4 text-blue-600" />
+              <label className="text-sm font-medium text-gray-700">还原预览 (还原 {matchCount} 处)</label>
+            </div>
+            <button onClick={() => setStep('confirm')} className="text-xs text-blue-600 hover:underline">返回确认</button>
+          </div>
+          <div className="p-4 bg-gray-50 border border-gray-200 rounded-lg max-h-80 overflow-y-auto">
+            <pre className="text-xs text-gray-700 whitespace-pre-wrap font-mono">{preview}</pre>
+          </div>
+        </div>
+      )}
+
+      {/* Action buttons */}
+      {(step === 'confirm' || step === 'preview') && (
+        <div className="flex gap-3">
+          {step === 'confirm' && (
+            <button type="button" onClick={handlePreview}
+              disabled={!maskedContent || !mappingData}
+              className="inline-flex items-center gap-2 rounded-lg bg-blue-600 px-5 py-2.5 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed">
+              <EyeIcon className="h-4 w-4" />预览还原
+            </button>
+          )}
+          {step === 'preview' && (
+            <button type="button" onClick={handleExecute}
+              className="inline-flex items-center gap-2 rounded-lg bg-blue-600 px-5 py-2.5 text-sm font-medium text-white hover:bg-blue-700">
+              <PlayIcon className="h-4 w-4" />执行还原并保存
+            </button>
+          )}
+          <button type="button" onClick={handleReset}
+            className="inline-flex items-center gap-2 rounded-lg border border-gray-300 bg-white px-4 py-2.5 text-sm font-medium text-gray-500 hover:bg-gray-50">
+            重新开始
+          </button>
+        </div>
+      )}
+    </div>
+  )
+}
