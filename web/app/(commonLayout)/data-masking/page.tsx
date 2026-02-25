@@ -4,15 +4,15 @@ import { useState, useEffect, useCallback, useRef } from 'react'
 import {
   RiShieldCheckLine,
   RiSettings4Line,
-  RiFileShield2Line,
-  RiFolderShield2Line,
   RiAddLine,
   RiDeleteBinLine,
   RiToggleLine,
   RiToggleFill,
   RiEditLine,
   RiRefreshLine,
+  RiFolderLine,
 } from '@remixicon/react'
+import { useSearchParams } from 'next/navigation'
 import useDocumentTitle from '@/hooks/use-document-title'
 import { RulesManager } from '@/lib/data-masking/rules-manager'
 import type { MaskingRule } from '@/lib/data-masking/types'
@@ -23,25 +23,18 @@ import { RuleForm } from '@/app/components/data-masking/rule-form'
 
 type TabType = 'mask' | 'rules' | 'files' | 'sandbox'
 
-const TABS: { id: TabType; name: string; icon: React.ComponentType<{ className?: string }> }[] = [
-  { id: 'mask', name: '文件脱敏', icon: RiFileShield2Line },
-  { id: 'rules', name: '脱敏规则', icon: RiShieldCheckLine },
-  { id: 'files', name: '文件管理', icon: RiFolderShield2Line },
-  { id: 'sandbox', name: '沙箱配置', icon: RiSettings4Line },
-]
-
-function NeedSandbox({ onGoConfig }: { onGoConfig: () => void }) {
+function NeedSandbox() {
   return (
     <div className="flex flex-col items-center justify-center py-20 text-center">
       <RiSettings4Line className="w-12 h-12 text-gray-300 mb-4" />
       <h3 className="text-sm font-medium text-gray-900 mb-1">请先配置沙箱路径</h3>
       <p className="text-xs text-gray-500 mb-4">脱敏文件将保存到沙箱目录</p>
-      <button
-        onClick={onGoConfig}
+      <a
+        href="/data-masking?tab=sandbox"
         className="px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700"
       >
         前往配置
-      </button>
+      </a>
     </div>
   )
 }
@@ -137,7 +130,8 @@ function RulesPanel({
 function DataMaskingPage() {
   useDocumentTitle('数据脱敏')
 
-  const [activeTab, setActiveTab] = useState<TabType>('mask')
+  const searchParams = useSearchParams()
+  const activeTab = (searchParams.get('tab') as TabType) || 'mask'
   const [sandboxPath, setSandboxPath] = useState('')
   const [rules, setRules] = useState<MaskingRule[]>([])
   const [isLoading, setIsLoading] = useState(false)
@@ -145,15 +139,12 @@ function DataMaskingPage() {
   const [editingRule, setEditingRule] = useState<MaskingRule | undefined>()
   const rulesManagerRef = useRef<RulesManager | null>(null)
 
-  // Initialize sandbox path from localStorage
   useEffect(() => {
     const saved = localStorage.getItem('sandbox_path')
-    if (saved && !saved.startsWith('[')) {
+    if (saved && !saved.startsWith('['))
       setSandboxPath(saved)
-    }
   }, [])
 
-  // Initialize rules manager
   useEffect(() => {
     const mgr = new RulesManager()
     rulesManagerRef.current = mgr
@@ -169,12 +160,8 @@ function DataMaskingPage() {
       const all = await manager.getAllRules()
       setRules(all.sort((a, b) => a.priority - b.priority))
     }
-    catch (err) {
-      console.error('Failed to load rules:', err)
-    }
-    finally {
-      setIsLoading(false)
-    }
+    catch (err) { console.error('Failed to load rules:', err) }
+    finally { setIsLoading(false) }
   }, [])
 
   const handleSandboxConfigured = useCallback((path: string) => {
@@ -190,9 +177,7 @@ function DataMaskingPage() {
       setShowForm(false)
       setEditingRule(undefined)
     }
-    catch (err) {
-      console.error('Failed to create rule:', err)
-    }
+    catch (err) { console.error('Failed to create rule:', err) }
   }, [loadRules])
 
   const handleUpdateRule = useCallback(async (data: Omit<MaskingRule, 'id' | 'createdAt' | 'updatedAt'>) => {
@@ -204,9 +189,7 @@ function DataMaskingPage() {
       setShowForm(false)
       setEditingRule(undefined)
     }
-    catch (err) {
-      console.error('Failed to update rule:', err)
-    }
+    catch (err) { console.error('Failed to update rule:', err) }
   }, [editingRule, loadRules])
 
   const handleDeleteRule = useCallback(async (id: string) => {
@@ -217,9 +200,7 @@ function DataMaskingPage() {
       await mgr.deleteRule(id)
       await loadRules(mgr)
     }
-    catch (err) {
-      console.error('Failed to delete rule:', err)
-    }
+    catch (err) { console.error('Failed to delete rule:', err) }
   }, [loadRules])
 
   const handleToggleRule = useCallback(async (id: string) => {
@@ -231,47 +212,36 @@ function DataMaskingPage() {
       await mgr.updateRule(id, { enabled: !rule.enabled })
       await loadRules(mgr)
     }
-    catch (err) {
-      console.error('Failed to toggle rule:', err)
-    }
+    catch (err) { console.error('Failed to toggle rule:', err) }
   }, [rules, loadRules])
 
   const needsSandbox = !sandboxPath && (activeTab === 'mask' || activeTab === 'files')
 
-  return (
-    <div className="h-full bg-gray-50 overflow-y-auto">
-      <div className="max-w-4xl mx-auto px-6 py-6">
-        {/* Horizontal tabs */}
-        <div className="flex items-center gap-1 border-b border-gray-200 mb-6">
-          {TABS.map((tab) => {
-            const Icon = tab.icon
-            const isActive = activeTab === tab.id
-            return (
-              <button
-                key={tab.id}
-                onClick={() => setActiveTab(tab.id)}
-                className={`flex items-center gap-2 px-4 py-2.5 text-sm font-medium border-b-2 transition-colors -mb-px ${
-                  isActive
-                    ? 'border-blue-600 text-blue-600'
-                    : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
-                }`}
-              >
-                <Icon className={`w-4 h-4 ${isActive ? 'text-blue-600' : 'text-gray-400'}`} />
-                {tab.name}
-              </button>
-            )
-          })}
-          {sandboxPath && (
-            <span className="ml-auto text-xs text-gray-400 truncate max-w-[200px]" title={sandboxPath}>
-              📁 {sandboxPath}
-            </span>
-          )}
-        </div>
+  const TAB_TITLES: Record<TabType, string> = {
+    mask: '文件脱敏',
+    rules: '脱敏规则',
+    files: '文件管理',
+    sandbox: '沙箱配置',
+  }
 
-        {/* Content */}
+  return (
+    <div className="relative flex h-0 shrink-0 grow flex-col overflow-y-auto bg-background-body">
+      {/* Top header bar */}
+      <div className="sticky top-0 z-10 flex items-center justify-between bg-background-body px-12 pb-4 pt-7">
+        <h2 className="text-lg font-semibold text-gray-900">{TAB_TITLES[activeTab]}</h2>
+        {sandboxPath && (
+          <div className="flex items-center gap-1.5 text-xs text-gray-400 bg-gray-50 rounded-lg px-3 py-1.5 border border-gray-100">
+            <RiFolderLine className="w-3.5 h-3.5 text-gray-400" />
+            <span className="truncate max-w-[300px]" title={sandboxPath}>{sandboxPath}</span>
+          </div>
+        )}
+      </div>
+
+      {/* Content area */}
+      <div className="px-12 pb-8">
         {activeTab === 'mask' && (
           needsSandbox
-            ? <NeedSandbox onGoConfig={() => setActiveTab('sandbox')} />
+            ? <NeedSandbox />
             : <FileMasking sandboxPath={sandboxPath} />
         )}
 
@@ -289,7 +259,7 @@ function DataMaskingPage() {
 
         {activeTab === 'files' && (
           needsSandbox
-            ? <NeedSandbox onGoConfig={() => setActiveTab('sandbox')} />
+            ? <NeedSandbox />
             : <FileList sandboxPath={sandboxPath} />
         )}
 

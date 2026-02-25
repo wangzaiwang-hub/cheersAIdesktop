@@ -1,21 +1,29 @@
 'use client'
 
 import {
+  RiApps2Line,
   RiDashboardFill,
   RiDashboardLine,
   RiDatabase2Fill,
   RiDatabase2Line,
+  RiExchange2Line,
+  RiFile4Line,
+  RiFileShield2Line,
+  RiFolderShield2Line,
   RiHammerFill,
   RiHammerLine,
   RiMenuFoldLine,
   RiMenuUnfoldLine,
+  RiMessage3Line,
   RiPlanetFill,
   RiPlanetLine,
+  RiRobot3Line,
+  RiSettings4Line,
   RiShieldCheckFill,
   RiShieldCheckLine,
 } from '@remixicon/react'
 import Link from 'next/link'
-import { useSelectedLayoutSegment } from 'next/navigation'
+import { useSearchParams, useSelectedLayoutSegment } from 'next/navigation'
 import { useState } from 'react'
 import { useAppContext } from '@/context/app-context'
 import { Group } from '@/app/components/base/icons/src/vender/other'
@@ -24,6 +32,13 @@ import AccountDropdown from '../account-dropdown'
 import EnvNav from '../env-nav'
 import PluginsNav from '../plugins-nav'
 
+interface SubItemConfig {
+  id: string
+  href: string
+  icon: React.ReactNode
+  label: string
+}
+
 interface NavItemConfig {
   id: string
   href: string
@@ -31,10 +46,16 @@ interface NavItemConfig {
   activeIcon: React.ReactNode
   label: string
   segments: string[]
+  children?: SubItemConfig[]
+  /** query param name used for child active detection */
+  childParam?: string
+  /** default child id when no param is set */
+  childDefault?: string
 }
 
 const SideNav = () => {
   const segment = useSelectedLayoutSegment()
+  const searchParams = useSearchParams()
   const { isCurrentWorkspaceEditor, isCurrentWorkspaceDatasetOperator } = useAppContext()
   const [collapsed, setCollapsed] = useState(() => {
     if (typeof window !== 'undefined')
@@ -50,6 +71,17 @@ const SideNav = () => {
     })
   }
 
+
+  // 工作台子菜单
+  const appsChildren: SubItemConfig[] = [
+    { id: 'all', href: '/apps?category=all', icon: <RiApps2Line className="h-4 w-4" />, label: '全部' },
+    { id: 'workflow', href: '/apps?category=workflow', icon: <RiExchange2Line className="h-4 w-4" />, label: '工作流' },
+    { id: 'advanced-chat', href: '/apps?category=advanced-chat', icon: <RiMessage3Line className="h-4 w-4" />, label: 'Chatflow' },
+    { id: 'chat', href: '/apps?category=chat', icon: <RiMessage3Line className="h-4 w-4" />, label: '聊天助手' },
+    { id: 'agent-chat', href: '/apps?category=agent-chat', icon: <RiRobot3Line className="h-4 w-4" />, label: 'Agent' },
+    { id: 'completion', href: '/apps?category=completion', icon: <RiFile4Line className="h-4 w-4" />, label: '文本生成' },
+  ]
+
   const navItems: NavItemConfig[] = []
 
   // 工作台 (原 apps)
@@ -61,8 +93,19 @@ const SideNav = () => {
       activeIcon: <RiDashboardFill className="h-5 w-5" />,
       label: '工作台',
       segments: ['apps', 'app'],
+      children: appsChildren,
+      childParam: 'category',
+      childDefault: 'all',
     })
   }
+
+  // 脱敏沙箱子菜单
+  const dataMaskingChildren: SubItemConfig[] = [
+    { id: 'mask', href: '/data-masking?tab=mask', icon: <RiFileShield2Line className="h-4 w-4" />, label: '文件脱敏' },
+    { id: 'rules', href: '/data-masking?tab=rules', icon: <RiShieldCheckLine className="h-4 w-4" />, label: '脱敏规则' },
+    { id: 'files', href: '/data-masking?tab=files', icon: <RiFolderShield2Line className="h-4 w-4" />, label: '文件管理' },
+    { id: 'sandbox', href: '/data-masking?tab=sandbox', icon: <RiSettings4Line className="h-4 w-4" />, label: '沙箱配置' },
+  ]
 
   // 脱敏沙箱
   if (!isCurrentWorkspaceDatasetOperator) {
@@ -73,6 +116,9 @@ const SideNav = () => {
       activeIcon: <RiShieldCheckFill className="h-5 w-5" />,
       label: '脱敏沙箱',
       segments: ['data-masking'],
+      children: dataMaskingChildren,
+      childParam: 'tab',
+      childDefault: 'mask',
     })
   }
 
@@ -158,28 +204,58 @@ const SideNav = () => {
       <nav className="flex-1 flex flex-col gap-0.5 px-3 py-2 overflow-y-auto">
         {navItems.map((item) => {
           const isActive = item.segments.includes(segment ?? '')
+          const hasChildren = item.children && item.children.length > 0
+          const showChildren = isActive && hasChildren && !collapsed
+
           return (
-            <Link
-              key={item.id}
-              href={item.href}
-              title={collapsed ? item.label : undefined}
-              className={cn(
-                'flex items-center gap-3 rounded-xl transition-colors',
-                collapsed ? 'justify-center px-0 py-3' : 'px-4 py-3',
-                isActive
-                  ? 'bg-[#2563eb] text-white font-medium'
-                  : 'text-white/70 hover:bg-white/5 hover:text-white',
-              )}
-            >
-              <span className="shrink-0">
-                {isActive ? item.activeIcon : item.icon}
-              </span>
-              {!collapsed && (
-                <span className="text-sm truncate">
-                  {item.label}
+            <div key={item.id}>
+              <Link
+                href={item.href}
+                title={collapsed ? item.label : undefined}
+                className={cn(
+                  'flex items-center gap-3 rounded-xl transition-colors',
+                  collapsed ? 'justify-center px-0 py-3' : 'px-4 py-3',
+                  isActive && !showChildren
+                    ? 'bg-[#2563eb] text-white font-medium'
+                    : isActive
+                      ? 'bg-white/10 text-white font-medium'
+                      : 'text-white/70 hover:bg-white/5 hover:text-white',
+                )}
+              >
+                <span className="shrink-0">
+                  {isActive ? item.activeIcon : item.icon}
                 </span>
+                {!collapsed && (
+                  <span className="text-sm truncate">
+                    {item.label}
+                  </span>
+                )}
+              </Link>
+              {/* Sub-items */}
+              {showChildren && (
+                <div className="mt-0.5 ml-4 flex flex-col gap-0.5">
+                  {item.children!.map((child) => {
+                    const paramValue = item.childParam ? (searchParams.get(item.childParam) || item.childDefault) : ''
+                    const isChildActive = isActive && paramValue === child.id
+                    return (
+                      <Link
+                        key={child.id}
+                        href={child.href}
+                        className={cn(
+                          'flex items-center gap-2.5 rounded-lg px-3 py-2 transition-colors text-[13px]',
+                          isChildActive
+                            ? 'bg-[#2563eb] text-white font-medium'
+                            : 'text-white/60 hover:bg-white/5 hover:text-white/90',
+                        )}
+                      >
+                        <span className="shrink-0">{child.icon}</span>
+                        <span className="truncate">{child.label}</span>
+                      </Link>
+                    )
+                  })}
+                </div>
               )}
-            </Link>
+            </div>
           )
         })}
       </nav>
