@@ -9,7 +9,7 @@ interface SandboxConfigProps {
 }
 
 export function SandboxConfig({ onConfigured }: SandboxConfigProps) {
-  const { enabled: securityEnabled, setEnabled: setSecurityEnabled } = useSandboxSecurity()
+  const { enabled: securityEnabled, setEnabled: setSecurityEnabled, setSandboxPath: setContextSandboxPath } = useSandboxSecurity()
   const [sandboxPath, setSandboxPath] = useState<string>('')
   const [currentPath, setCurrentPath] = useState<string>('')
   const [isValid, setIsValid] = useState<boolean | null>(null)
@@ -57,7 +57,7 @@ export function SandboxConfig({ onConfigured }: SandboxConfigProps) {
       if (res.ok) {
         setIsValid(true)
         setCurrentPath(trimmed)
-        localStorage.setItem('sandbox_path', trimmed)
+        setContextSandboxPath(trimmed)
         onConfigured?.(trimmed)
       }
       else {

@@ -12,6 +12,8 @@ interface SandboxSecurityContextValue {
   setEnabled: (v: boolean) => void
   /** The configured sandbox path */
   sandboxPath: string
+  /** Update the sandbox path (also persists to localStorage) */
+  setSandboxPath: (path: string) => void
   /** Whether sandbox is properly configured */
   isConfigured: boolean
 }
@@ -20,6 +22,7 @@ const SandboxSecurityContext = createContext<SandboxSecurityContextValue>({
   enabled: true,
   setEnabled: () => {},
   sandboxPath: '',
+  setSandboxPath: () => {},
   isConfigured: false,
 })
 
@@ -52,12 +55,18 @@ export function SandboxSecurityProvider({ children }: { children: React.ReactNod
     localStorage.setItem(STORAGE_KEY, String(v))
   }, [])
 
+  const updateSandboxPath = useCallback((path: string) => {
+    setSandboxPath(path)
+    localStorage.setItem(SANDBOX_PATH_KEY, path)
+  }, [])
+
   const value = useMemo<SandboxSecurityContextValue>(() => ({
     enabled,
     setEnabled,
     sandboxPath,
+    setSandboxPath: updateSandboxPath,
     isConfigured: !!sandboxPath,
-  }), [enabled, setEnabled, sandboxPath])
+  }), [enabled, setEnabled, sandboxPath, updateSandboxPath])
 
   return (
     <SandboxSecurityContext.Provider value={value}>

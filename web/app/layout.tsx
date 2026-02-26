@@ -4,6 +4,7 @@ import { ThemeProvider } from 'next-themes'
 // // // // // // // // import { Instrument_Serif } from 'next/font/google' // Temporarily disabled for build // Temporarily disabled for build // Temporarily disabled for build // Temporarily disabled for build
 import { NuqsAdapter } from 'nuqs/adapters/next/app'
 import GlobalPublicStoreProvider from '@/context/global-public-context'
+import { SandboxSecurityProvider } from '@/context/sandbox-security-context'
 import { TanstackQueryInitializer } from '@/context/query-client'
 import { getLocaleOnServer } from '@/i18n-config/server'
 import { DatasetAttr } from '@/types/feature'
@@ -105,7 +106,9 @@ const LocaleLayout = async ({
                       <I18nServerProvider>
                         <ToastProvider>
                           <GlobalPublicStoreProvider>
-                            {children}
+                            <SandboxSecurityProvider>
+                              {children}
+                            </SandboxSecurityProvider>
                           </GlobalPublicStoreProvider>
                         </ToastProvider>
                       </I18nServerProvider>

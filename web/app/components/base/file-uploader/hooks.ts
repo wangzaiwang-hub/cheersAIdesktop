@@ -255,7 +255,8 @@ export const useFile = (fileConfig: FileUpload, noNeedToCheckEnable = true) => {
       notify({ type: 'error', message: t('fileUploader.uploadDisabled', { ns: 'common' }) })
       return
     }
-    if (!isAllowedFileExtension(file.name, file.type, fileConfig.allowed_file_types || [], fileConfig.allowed_file_extensions || [])) {
+    const isSandboxFile = !!(file as Record<string, unknown>)._fromSandbox
+    if (!isSandboxFile && !isAllowedFileExtension(file.name, file.type, fileConfig.allowed_file_types || [], fileConfig.allowed_file_extensions || [])) {
       notify({ type: 'error', message: `${t('fileUploader.fileExtensionNotSupport', { ns: 'common' })} ${file.type}` })
       return
     }

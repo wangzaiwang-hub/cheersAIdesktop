@@ -1,6 +1,7 @@
 'use client'
 
 import { useCallback, useEffect, useState } from 'react'
+import { createPortal } from 'react-dom'
 import {
   RiCloseLine,
   RiFile3Line,
@@ -25,35 +26,44 @@ interface SandboxFilePickerProps {
 }
 
 export function SandboxFilePicker({ open, onClose, onSelect, accept, multiple }: SandboxFilePickerProps) {
-  const { sandboxPath } = useSandboxSecurity()
+  const { sandboxPath: contextPath } = useSandboxSecurity()
+  // Fallback: read directly from localStorage if context hasn't synced yet
+  const sandboxPath = contextPath || (typeof window !== 'undefined' ? localStorage.getItem('sandbox_path') || '' : '')
   const [files, setFiles] = useState<SandboxFile[]>([])
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
   const [selected, setSelected] = useState<Set<string>>(new Set())
 
   const loadFiles = useCallback(async () => {
-    if (!sandboxPath) return
+    if (!sandboxPath) {
+      setError('沙箱路径未配置，请先在「脱敏沙箱 → 沙箱配置」中设置路径')
+      return
+    }
     setLoading(true)
     setError('')
     try {
-      const res = await fetch(
-        `http://localhost:5001/console/api/data-masking/sandbox/files/list?sandbox_path=${encodeURIComponent(sandboxPath)}`,
-      )
-      if (!res.ok) throw new Error('Failed to load files')
+      const url = `http://localhost:5001/console/api/data-masking/sandbox/files/list?sandbox_path=${encodeURIComponent(sandboxPath)}`
+      const res = await fetch(url)
+      if (!res.ok) throw new Error(`HTTP ${res.status}`)
       const data = await res.json()
       let fileList: SandboxFile[] = data.files || []
 
-      // Filter by accept types if specified
+      // Filter by accept types if specified (skip filter if no matches to avoid empty list)
       if (accept) {
-        const exts = accept.split(',').map(e => e.trim().toLowerCase())
-        fileList = fileList.filter(f =>
-          exts.some(ext => f.name.toLowerCase().endsWith(ext.replace('*', ''))),
-        )
+        const exts = accept.split(',').map(e => e.trim().toLowerCase()).filter(e => e.startsWith('.'))
+        if (exts.length > 0) {
+          const filtered = fileList.filter(f =>
+            exts.some(ext => f.name.toLowerCase().endsWith(ext)),
+          )
+          if (filtered.length > 0)
+            fileList = filtered
+          // If no matches, show all files (fallback)
+        }
       }
       setFiles(fileList)
     }
     catch {
-      setError('无法加载沙箱文件列表')
+      setError('无法加载沙箱文件列表，请确认后端已启动')
     }
     finally {
       setLoading(false)
@@ -80,6 +90,7 @@ export function SandboxFilePicker({ open, onClose, onSelect, accept, multiple }:
     })
   }
 
+
   const handleConfirm = async () => {
     if (selected.size === 0) return
     const filePromises = Array.from(selected).map(async (name) => {
@@ -88,8 +99,11 @@ export function SandboxFilePicker({ open, onClose, onSelect, accept, multiple }:
       )
       if (!res.ok) throw new Error(`Failed to read ${name}`)
       const data = await res.json()
-      const blob = new Blob([data.content], { type: 'text/plain' })
-      return new File([blob], name, { type: 'text/plain' })
+      const blob = new Blob([data.content])
+      const file = new File([blob], name)
+      // Mark as sandbox file to bypass extension checks in the uploader
+      ;(file as unknown as Record<string, unknown>)._fromSandbox = true
+      return file
     })
     try {
       const fileObjects = await Promise.all(filePromises)
@@ -109,7 +123,7 @@ export function SandboxFilePicker({ open, onClose, onSelect, accept, multiple }:
 
   if (!open) return null
 
-  return (
+  return createPortal(
     <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/50">
       <div className="w-[560px] max-h-[70vh] bg-white rounded-2xl shadow-2xl flex flex-col">
         {/* Header */}
@@ -194,6 +208,7 @@ export function SandboxFilePicker({ open, onClose, onSelect, accept, multiple }:
           </div>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body,
   )
 }
