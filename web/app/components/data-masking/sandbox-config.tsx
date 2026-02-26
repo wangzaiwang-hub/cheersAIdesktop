@@ -15,6 +15,8 @@ export function SandboxConfig({ onConfigured }: SandboxConfigProps) {
   const [isValid, setIsValid] = useState<boolean | null>(null)
   const [error, setError] = useState<string>('')
   const [isLoading, setIsLoading] = useState(false)
+  const [aiReplyDownloadPath, setAiReplyDownloadPath] = useState('')
+  const [aiReplyDownloadPathSaved, setAiReplyDownloadPathSaved] = useState(false)
 
   useEffect(() => {
     const saved = localStorage.getItem('sandbox_path')
@@ -24,6 +26,9 @@ export function SandboxConfig({ onConfigured }: SandboxConfigProps) {
       setIsValid(true)
       onConfigured?.(saved)
     }
+    const savedAiPath = localStorage.getItem('ai_reply_download_path')
+    if (savedAiPath)
+      setAiReplyDownloadPath(savedAiPath)
   }, [])
 
   const handlePathChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -167,6 +172,35 @@ export function SandboxConfig({ onConfigured }: SandboxConfigProps) {
         </button>
       </div>
 
+      {/* AI回复下载路径配置 */}
+      <div className="rounded-lg border border-gray-200 bg-white p-4">
+        <h3 className="text-sm font-medium text-gray-900 mb-1">AI 回复下载路径</h3>
+        <p className="text-xs text-gray-500 mb-3">
+          点击聊天中的下载按钮时，AI 回复将自动保存为 MD 文件到此路径。留空则使用沙箱路径，都未配置则触发浏览器下载。
+        </p>
+        <div className="flex gap-2">
+          <input
+            type="text"
+            value={aiReplyDownloadPath}
+            onChange={e => setAiReplyDownloadPath(e.target.value)}
+            placeholder={currentPath || '默认使用沙箱路径'}
+            className="flex-1 rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+          />
+          <button
+            type="button"
+            onClick={() => {
+              const trimmed = aiReplyDownloadPath.trim()
+              localStorage.setItem('ai_reply_download_path', trimmed)
+              setAiReplyDownloadPathSaved(true)
+              setTimeout(() => setAiReplyDownloadPathSaved(false), 2000)
+            }}
+            className="inline-flex items-center rounded-md bg-blue-600 px-3 py-2 text-sm font-medium text-white hover:bg-blue-700"
+          >
+            {aiReplyDownloadPathSaved ? '已保存 ✓' : '保存'}
+          </button>
+        </div>
+      </div>
+
       <div className="rounded-lg border border-blue-100 bg-blue-50 p-4">
         <h4 className="text-sm font-medium text-blue-900 mb-2">使用说明</h4>
         <ul className="space-y-1 text-xs text-blue-800">
@@ -174,6 +208,7 @@ export function SandboxConfig({ onConfigured }: SandboxConfigProps) {
           <li>• 目录不存在时会自动创建</li>
           <li>• 脱敏后的文件会直接保存到该目录，同时触发浏览器下载</li>
           <li>• 路径保存后刷新页面不会丢失</li>
+          <li>• AI 回复下载路径可单独配置，不填则默认使用沙箱路径</li>
         </ul>
       </div>
     </div>
