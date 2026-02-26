@@ -23,6 +23,8 @@ import {
   RiPlanetFill,
   RiPlanetLine,
   RiPlugLine,
+  RiPuzzle2Fill,
+  RiPuzzle2Line,
   RiRobot3Line,
   RiSettings4Line,
   RiShieldCheckFill,
@@ -34,11 +36,9 @@ import { useRouter } from 'next/navigation'
 import { useSearchParams, useSelectedLayoutSegment } from 'next/navigation'
 import { useEffect, useState } from 'react'
 import { useAppContext } from '@/context/app-context'
-import { Group } from '@/app/components/base/icons/src/vender/other'
 import { cn } from '@/utils/classnames'
 import AccountDropdown from '../account-dropdown'
 import EnvNav from '../env-nav'
-import PluginsNav from '../plugins-nav'
 import { useLogout } from '@/service/use-common'
 
 interface SubItemConfig {
@@ -89,19 +89,6 @@ const SideNav = () => {
   }
 
   const [expandedItems, setExpandedItems] = useState<Set<string>>(new Set())
-
-  const toggleExpand = (id: string, e: React.MouseEvent) => {
-    e.preventDefault()
-    e.stopPropagation()
-    setExpandedItems((prev) => {
-      const next = new Set(prev)
-      if (next.has(id))
-        next.delete(id)
-      else
-        next.add(id)
-      return next
-    })
-  }
 
   // 工作台子菜单
   const appsChildren: SubItemConfig[] = [
@@ -201,6 +188,18 @@ const SideNav = () => {
     })
   }
 
+  // 插件
+  if (!isCurrentWorkspaceDatasetOperator) {
+    navItems.push({
+      id: 'plugins',
+      href: '/plugins',
+      icon: <RiPuzzle2Line className="h-5 w-5" />,
+      activeIcon: <RiPuzzle2Fill className="h-5 w-5" />,
+      label: '插件',
+      segments: ['plugins'],
+    })
+  }
+
   // Auto-expand the active nav item on mount / segment change
   useEffect(() => {
     const activeItem = navItems.find(item => item.segments.includes(segment ?? ''))
@@ -265,46 +264,57 @@ const SideNav = () => {
           const isExpanded = expandedItems.has(item.id)
           const showChildren = isExpanded && hasChildren && !collapsed
 
+          const handleItemClick = (e: React.MouseEvent) => {
+            if (hasChildren && !collapsed) {
+              e.preventDefault()
+              setExpandedItems((prev) => {
+                const next = new Set(prev)
+                if (next.has(item.id))
+                  next.delete(item.id)
+                else
+                  next.add(item.id)
+                return next
+              })
+              // Navigate if not already on this section
+              if (!isActive)
+                router.push(item.href)
+            }
+          }
+
           return (
             <div key={item.id}>
-              <div className="relative flex items-center">
-                <Link
-                  href={item.href}
-                  title={collapsed ? item.label : undefined}
-                  className={cn(
-                    'flex items-center gap-3 rounded-xl transition-colors flex-1 min-w-0',
-                    collapsed ? 'justify-center px-0 py-3' : 'px-4 py-3',
-                    isActive && !showChildren
-                      ? 'bg-[#2563eb] text-white font-medium'
-                      : isActive
-                        ? 'bg-white/10 text-white font-medium'
-                        : 'text-white/70 hover:bg-white/5 hover:text-white',
-                  )}
-                >
-                  <span className="shrink-0">
-                    {isActive ? item.activeIcon : item.icon}
-                  </span>
-                  {!collapsed && (
-                    <span className="text-sm truncate">
+              <Link
+                href={item.href}
+                onClick={handleItemClick}
+                title={collapsed ? item.label : undefined}
+                className={cn(
+                  'flex items-center gap-3 rounded-xl transition-colors w-full',
+                  collapsed ? 'justify-center px-0 py-3' : 'px-4 py-3',
+                  isActive && !showChildren
+                    ? 'bg-[#2563eb] text-white font-medium'
+                    : isActive
+                      ? 'bg-white/10 text-white font-medium'
+                      : 'text-white/70 hover:bg-white/5 hover:text-white',
+                )}
+              >
+                <span className="shrink-0">
+                  {isActive ? item.activeIcon : item.icon}
+                </span>
+                {!collapsed && (
+                  <>
+                    <span className="text-sm truncate flex-1">
                       {item.label}
                     </span>
-                  )}
-                </Link>
-                {hasChildren && !collapsed && (
-                  <button
-                    onClick={e => toggleExpand(item.id, e)}
-                    className={cn(
-                      'absolute right-1 p-1 rounded-md transition-colors',
-                      'text-white/40 hover:text-white/80 hover:bg-white/10',
+                    {hasChildren && (
+                      <span className="shrink-0 text-white/40">
+                        {isExpanded
+                          ? <RiArrowDownSLine className="w-4 h-4" />
+                          : <RiArrowRightSLine className="w-4 h-4" />}
+                      </span>
                     )}
-                    title={isExpanded ? '收起' : '展开'}
-                  >
-                    {isExpanded
-                      ? <RiArrowDownSLine className="w-4 h-4" />
-                      : <RiArrowRightSLine className="w-4 h-4" />}
-                  </button>
+                  </>
                 )}
-              </div>
+              </Link>
               {/* Sub-items */}
               {showChildren && (
                 <div className="mt-0.5 ml-4 flex flex-col gap-0.5">
@@ -334,15 +344,12 @@ const SideNav = () => {
         })}
       </nav>
 
-      {/* Bottom: env, plugins, account */}
+      {/* Bottom: env, account */}
       <div className="shrink-0 border-t border-white/5 px-3 py-3 flex flex-col gap-2">
         {!collapsed
           ? (
             <>
               <EnvNav />
-              <div className="side-nav-plugins-wrap">
-                <PluginsNav />
-              </div>
               <div className="flex items-center gap-3 px-2 py-1.5 rounded-lg hover:bg-white/5 transition-colors">
                 <AccountDropdown />
                 <div className="flex flex-col min-w-0 flex-1">
@@ -360,14 +367,9 @@ const SideNav = () => {
             </>
           )
           : (
-            <>
-              <Link href="/plugins" title="插件" className="flex justify-center py-1.5 rounded-lg hover:bg-white/10 w-full">
-                <Group className="h-5 w-5 text-white/60 hover:text-white" />
-              </Link>
-              <div className="flex justify-center w-full">
-                <AccountDropdown />
-              </div>
-            </>
+            <div className="flex justify-center w-full">
+              <AccountDropdown />
+            </div>
           )}
       </div>
       <style jsx global>{`
@@ -377,20 +379,6 @@ const SideNav = () => {
         }
         .scrollbar-hide::-webkit-scrollbar {
           display: none;
-        }
-        .side-nav-plugins-wrap .plugins-nav-button > div {
-          color: rgba(255,255,255,0.7) !important;
-          border-color: transparent !important;
-          background: transparent !important;
-          box-shadow: none !important;
-        }
-        .side-nav-plugins-wrap .plugins-nav-button > div:hover {
-          color: white !important;
-          background: rgba(255,255,255,0.05) !important;
-        }
-        .side-nav-plugins-wrap .plugins-nav-button > div svg,
-        .side-nav-plugins-wrap .plugins-nav-button > div span {
-          color: inherit !important;
         }
       `}</style>
     </div>
