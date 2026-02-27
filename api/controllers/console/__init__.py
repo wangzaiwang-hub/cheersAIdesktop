@@ -119,6 +119,8 @@ from .explore import (
 from .tag import tags
 
 # Data masking sandbox_files uses its own Blueprint (registered in ext_blueprints)
+# sandbox_knowledge uses console_ns (authenticated)
+from .data_masking import sandbox_knowledge  # noqa: F401
 
 # Import workspace controllers
 from .workspace import (
