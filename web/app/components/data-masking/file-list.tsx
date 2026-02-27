@@ -1,4 +1,4 @@
-﻿'use client'
+'use client'
 
 import { useState, useEffect, useCallback, useMemo } from 'react'
 import {
@@ -19,7 +19,8 @@ import {
   readSandboxFile as apiReadFile,
   deleteSandboxFile as apiDeleteFile,
 } from '@/service/sandbox-files'
-import { post } from '@/service/base'
+import { API_PREFIX, CSRF_COOKIE_NAME, CSRF_HEADER_NAME } from '@/config'
+import Cookies from 'js-cookie'
 
 interface FileRecord {
   id: string
@@ -172,27 +173,24 @@ export function FileList({ sandboxPath }: FileListProps) {
     setIsSyncing(true)
     setSyncMsg('')
     try {
-      const data = await post<Record<string, unknown>>('/data-masking/sandbox/sync-to-knowledge', {
-        body: { sandbox_path: sandboxPath, dataset_name: name },
+      const res = await globalThis.fetch(API_PREFIX + '/data-masking/sandbox/sync-to-knowledge', {
+        method: 'POST',
+        credentials: 'include',
+        headers: { 'Content-Type': 'application/json', [CSRF_HEADER_NAME]: Cookies.get(CSRF_COOKIE_NAME()) || '' },
+        body: JSON.stringify({ sandbox_path: sandboxPath, dataset_name: name }),
       })
-      if (data.result === 'success')
-        setSyncMsg(`同步成功！已创建知识库「${data.dataset_name}」，共 ${data.file_count} 个文件`)
-      else
-        setSyncMsg((data.error as string) || '同步失败')
+      const data = await res.json()
+      if (data.result === 'success') {
+        const skippedCount = data.skipped ? data.skipped.length : 0
+        const skippedMsg = skippedCount > 0 ? ' (跳过 ' + skippedCount + ' 个不支持的文件)' : ''
+        setSyncMsg('同步成功！已创建知识库「' + data.dataset_name + '」，共 ' + data.file_count + ' 个文件' + skippedMsg)
+      }
+      else {
+        setSyncMsg(data.error || data.message || '同步失败')
+      }
     }
-    catch (err: unknown) {
-      let msg = '同步失败'
-      if (err instanceof Response) {
-        try {
-          const data = await err.json()
-          msg = data.message || data.error || String(err.status)
-        }
-        catch { msg = String(err.status) }
-      }
-      else if (err instanceof Error) {
-        msg = err.message
-      }
-      setSyncMsg('同步失败: ' + msg)
+    catch (err) {
+      setSyncMsg('同步失败: ' + (err instanceof Error ? err.message : '网络错误'))
     }
     finally { setIsSyncing(false) }
   }
