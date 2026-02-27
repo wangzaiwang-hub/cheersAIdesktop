@@ -20,9 +20,10 @@ import { SandboxConfig } from '@/app/components/data-masking/sandbox-config'
 import { FileMasking } from '@/app/components/data-masking/file-masking'
 import { FileList } from '@/app/components/data-masking/file-list'
 import { FileRestore } from '@/app/components/data-masking/file-restore'
+import { SandboxTransfer } from '@/app/components/data-masking/sandbox-transfer'
 import { RuleForm } from '@/app/components/data-masking/rule-form'
 
-type TabType = 'mask' | 'restore' | 'rules' | 'files' | 'sandbox'
+type TabType = 'mask' | 'restore' | 'rules' | 'files' | 'transfer' | 'sandbox'
 
 function NeedSandbox() {
   return (
@@ -216,13 +217,14 @@ function DataMaskingPage() {
     catch (err) { console.error('Failed to toggle rule:', err) }
   }, [rules, loadRules])
 
-  const needsSandbox = !sandboxPath && (activeTab === 'mask' || activeTab === 'files' || activeTab === 'restore')
+  const needsSandbox = !sandboxPath && (activeTab === 'mask' || activeTab === 'files' || activeTab === 'restore' || activeTab === 'transfer')
 
   const TAB_TITLES: Record<TabType, string> = {
     mask: '文件脱敏',
     restore: '脱敏还原',
     rules: '脱敏规则',
     files: '文件管理',
+    transfer: '导出导入',
     sandbox: '沙箱配置',
   }
 
@@ -269,6 +271,12 @@ function DataMaskingPage() {
           needsSandbox
             ? <NeedSandbox />
             : <FileList sandboxPath={sandboxPath} />
+        )}
+
+        {activeTab === 'transfer' && (
+          needsSandbox
+            ? <NeedSandbox />
+            : <SandboxTransfer sandboxPath={sandboxPath} />
         )}
 
         {activeTab === 'sandbox' && (

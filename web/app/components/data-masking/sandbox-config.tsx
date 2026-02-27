@@ -17,6 +17,7 @@ export function SandboxConfig({ onConfigured }: SandboxConfigProps) {
   const [isLoading, setIsLoading] = useState(false)
   const [aiReplyDownloadPath, setAiReplyDownloadPath] = useState('')
   const [aiReplyDownloadPathSaved, setAiReplyDownloadPathSaved] = useState(false)
+  const [sensitiveWarning, setSensitiveWarning] = useState(true)
 
   useEffect(() => {
     const saved = localStorage.getItem('sandbox_path')
@@ -29,6 +30,9 @@ export function SandboxConfig({ onConfigured }: SandboxConfigProps) {
     const savedAiPath = localStorage.getItem('ai_reply_download_path')
     if (savedAiPath)
       setAiReplyDownloadPath(savedAiPath)
+    const savedWarning = localStorage.getItem('sensitive_send_warning')
+    if (savedWarning !== null)
+      setSensitiveWarning(savedWarning !== 'false')
   }, [])
 
   const handlePathChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -109,6 +113,34 @@ export function SandboxConfig({ onConfigured }: SandboxConfigProps) {
             <p className="text-xs text-amber-700">⚠️ 安全模式已开启，但尚未配置沙箱路径。请先在下方配置沙箱目录。</p>
           </div>
         )}
+      </div>
+
+      {/* Sensitive data send warning toggle */}
+      <div className="rounded-lg border border-gray-200 bg-white p-4">
+        <div className="flex items-center justify-between">
+          <div className="flex-1">
+            <h3 className="text-sm font-medium text-gray-900">发送敏感信息提醒</h3>
+            <p className="text-xs text-gray-500 mt-0.5">
+              开启后，在聊天中发送文本或文件前会弹出确认提示，提醒确认内容无敏感信息
+            </p>
+          </div>
+          <button
+            onClick={() => {
+              const next = !sensitiveWarning
+              setSensitiveWarning(next)
+              localStorage.setItem('sensitive_send_warning', String(next))
+            }}
+            className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
+              sensitiveWarning ? 'bg-blue-600' : 'bg-gray-300'
+            }`}
+          >
+            <span
+              className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
+                sensitiveWarning ? 'translate-x-6' : 'translate-x-1'
+              }`}
+            />
+          </button>
+        </div>
       </div>
 
       {currentPath && (
