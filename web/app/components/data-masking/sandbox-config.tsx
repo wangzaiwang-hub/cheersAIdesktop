@@ -48,15 +48,12 @@ export function SandboxConfig({ onConfigured }: SandboxConfigProps) {
       setIsValid(false)
       return
     }
-
-    // Must be absolute path
     const isAbsolute = /^[A-Za-z]:[\\/]/.test(trimmed) || trimmed.startsWith('/') || trimmed.startsWith('\\\\')
     if (!isAbsolute) {
       setError('请输入完整的绝对路径，例如 C:\\Users\\用户名\\Desktop\\masked-files')
       setIsValid(false)
       return
     }
-
     setIsLoading(true)
     setError('')
     try {
@@ -87,18 +84,18 @@ export function SandboxConfig({ onConfigured }: SandboxConfigProps) {
   return (
     <div className="space-y-6">
       {/* Security mode toggle */}
-      <div className="rounded-lg border border-gray-200 bg-white p-4">
+      <div className="rounded-lg border border-divider-regular bg-components-panel-bg p-4">
         <div className="flex items-center justify-between">
           <div className="flex-1">
-            <h3 className="text-sm font-medium text-gray-900">沙箱安全模式</h3>
-            <p className="text-xs text-gray-500 mt-0.5">
+            <h3 className="text-sm font-medium text-text-primary">沙箱安全模式</h3>
+            <p className="text-xs text-text-tertiary mt-0.5">
               开启后，系统其他模块（知识库、工作流等）的文件上传仅限从沙箱目录选择脱敏后的文件
             </p>
           </div>
           <button
             onClick={() => setSecurityEnabled(!securityEnabled)}
             className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
-              securityEnabled ? 'bg-blue-600' : 'bg-gray-300'
+              securityEnabled ? 'bg-components-button-primary-bg' : 'bg-components-input-bg-normal'
             }`}
           >
             <span
@@ -109,18 +106,18 @@ export function SandboxConfig({ onConfigured }: SandboxConfigProps) {
           </button>
         </div>
         {securityEnabled && !currentPath && (
-          <div className="mt-3 rounded-md bg-amber-50 border border-amber-200 px-3 py-2">
-            <p className="text-xs text-amber-700">⚠️ 安全模式已开启，但尚未配置沙箱路径。请先在下方配置沙箱目录。</p>
+          <div className="mt-3 rounded-md bg-state-warning-hover border border-state-warning-hover-alt px-3 py-2">
+            <p className="text-xs text-text-warning">⚠️ 安全模式已开启，但尚未配置沙箱路径。请先在下方配置沙箱目录。</p>
           </div>
         )}
       </div>
 
       {/* Sensitive data send warning toggle */}
-      <div className="rounded-lg border border-gray-200 bg-white p-4">
+      <div className="rounded-lg border border-divider-regular bg-components-panel-bg p-4">
         <div className="flex items-center justify-between">
           <div className="flex-1">
-            <h3 className="text-sm font-medium text-gray-900">发送敏感信息提醒</h3>
-            <p className="text-xs text-gray-500 mt-0.5">
+            <h3 className="text-sm font-medium text-text-primary">发送敏感信息提醒</h3>
+            <p className="text-xs text-text-tertiary mt-0.5">
               开启后，在聊天中发送文本或文件前会弹出确认提示，提醒确认内容无敏感信息
             </p>
           </div>
@@ -131,7 +128,7 @@ export function SandboxConfig({ onConfigured }: SandboxConfigProps) {
               localStorage.setItem('sensitive_send_warning', String(next))
             }}
             className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
-              sensitiveWarning ? 'bg-blue-600' : 'bg-gray-300'
+              sensitiveWarning ? 'bg-components-button-primary-bg' : 'bg-components-input-bg-normal'
             }`}
           >
             <span
@@ -144,12 +141,12 @@ export function SandboxConfig({ onConfigured }: SandboxConfigProps) {
       </div>
 
       {currentPath && (
-        <div className="rounded-lg border border-gray-200 bg-gray-50 p-4">
+        <div className="rounded-lg border border-divider-regular bg-background-section p-4">
           <div className="flex items-start gap-3">
-            <CheckCircleIcon className="h-5 w-5 text-green-500 mt-0.5" />
+            <CheckCircleIcon className="h-5 w-5 text-text-success mt-0.5" />
             <div className="flex-1">
-              <h3 className="text-sm font-medium text-gray-900">当前沙箱路径</h3>
-              <p className="mt-1 text-sm text-gray-600 font-mono break-all">{currentPath}</p>
+              <h3 className="text-sm font-medium text-text-primary">当前沙箱路径</h3>
+              <p className="mt-1 text-sm text-text-secondary font-mono break-all">{currentPath}</p>
             </div>
           </div>
         </div>
@@ -157,7 +154,7 @@ export function SandboxConfig({ onConfigured }: SandboxConfigProps) {
 
       <div className="space-y-4">
         <div>
-          <label htmlFor="sandbox-path" className="block text-sm font-medium text-gray-700 mb-2">
+          <label htmlFor="sandbox-path" className="block text-sm font-medium text-text-secondary mb-2">
             沙箱目录路径（绝对路径）
           </label>
           <input
@@ -167,30 +164,30 @@ export function SandboxConfig({ onConfigured }: SandboxConfigProps) {
             onChange={handlePathChange}
             onKeyDown={e => e.key === 'Enter' && handleValidate()}
             placeholder="C:\Users\33814\Desktop\report\test"
-            className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+            className="w-full rounded-md border border-components-input-border-active bg-components-input-bg-normal px-3 py-2 text-sm text-text-primary placeholder:text-text-placeholder focus:border-components-input-border-active focus:outline-none focus:ring-1 focus:ring-state-accent-solid"
           />
-          <p className="mt-2 text-xs text-gray-500">
+          <p className="mt-2 text-xs text-text-tertiary">
             输入完整的绝对路径，脱敏后的文件将通过后端 API 保存到该目录
           </p>
         </div>
 
         {isValid !== null && (
-          <div className={`rounded-md p-3 ${isValid ? 'bg-green-50 border border-green-200' : 'bg-red-50 border border-red-200'}`}>
+          <div className={`rounded-md p-3 ${isValid ? 'bg-state-success-hover border border-state-success-hover-alt' : 'bg-state-destructive-hover border border-state-destructive-border'}`}>
             <div className="flex items-start gap-2">
               {isValid ? (
                 <>
-                  <CheckCircleIcon className="h-5 w-5 text-green-500 mt-0.5" />
+                  <CheckCircleIcon className="h-5 w-5 text-text-success mt-0.5" />
                   <div className="flex-1">
-                    <p className="text-sm font-medium text-green-800">路径有效</p>
-                    <p className="mt-1 text-xs text-green-700">脱敏文件将保存到此目录</p>
+                    <p className="text-sm font-medium text-text-success">路径有效</p>
+                    <p className="mt-1 text-xs text-text-success">脱敏文件将保存到此目录</p>
                   </div>
                 </>
               ) : (
                 <>
-                  <XCircleIcon className="h-5 w-5 text-red-500 mt-0.5" />
+                  <XCircleIcon className="h-5 w-5 text-text-destructive mt-0.5" />
                   <div className="flex-1">
-                    <p className="text-sm font-medium text-red-800">路径无效</p>
-                    {error && <p className="mt-1 text-xs text-red-700">{error}</p>}
+                    <p className="text-sm font-medium text-text-destructive">路径无效</p>
+                    {error && <p className="mt-1 text-xs text-text-destructive">{error}</p>}
                   </div>
                 </>
               )}
@@ -199,15 +196,15 @@ export function SandboxConfig({ onConfigured }: SandboxConfigProps) {
         )}
 
         <button type="button" onClick={handleValidate} disabled={isLoading || !sandboxPath.trim()}
-          className="inline-flex items-center rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed">
+          className="inline-flex items-center rounded-md bg-components-button-primary-bg px-4 py-2 text-sm font-medium text-components-button-primary-text hover:bg-components-button-primary-bg-hover disabled:opacity-50 disabled:cursor-not-allowed">
           {isLoading ? '验证中...' : '验证并保存'}
         </button>
       </div>
 
       {/* AI回复下载路径配置 */}
-      <div className="rounded-lg border border-gray-200 bg-white p-4">
-        <h3 className="text-sm font-medium text-gray-900 mb-1">AI 回复下载路径</h3>
-        <p className="text-xs text-gray-500 mb-3">
+      <div className="rounded-lg border border-divider-regular bg-components-panel-bg p-4">
+        <h3 className="text-sm font-medium text-text-primary mb-1">AI 回复下载路径</h3>
+        <p className="text-xs text-text-tertiary mb-3">
           点击聊天中的下载按钮时，AI 回复将自动保存为 MD 文件到此路径。留空则使用沙箱路径，都未配置则触发浏览器下载。
         </p>
         <div className="flex gap-2">
@@ -216,7 +213,7 @@ export function SandboxConfig({ onConfigured }: SandboxConfigProps) {
             value={aiReplyDownloadPath}
             onChange={e => setAiReplyDownloadPath(e.target.value)}
             placeholder={currentPath || '默认使用沙箱路径'}
-            className="flex-1 rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+            className="flex-1 rounded-md border border-components-input-border-active bg-components-input-bg-normal px-3 py-2 text-sm text-text-primary placeholder:text-text-placeholder focus:border-components-input-border-active focus:outline-none focus:ring-1 focus:ring-state-accent-solid"
           />
           <button
             type="button"
@@ -226,16 +223,16 @@ export function SandboxConfig({ onConfigured }: SandboxConfigProps) {
               setAiReplyDownloadPathSaved(true)
               setTimeout(() => setAiReplyDownloadPathSaved(false), 2000)
             }}
-            className="inline-flex items-center rounded-md bg-blue-600 px-3 py-2 text-sm font-medium text-white hover:bg-blue-700"
+            className="inline-flex items-center rounded-md bg-components-button-primary-bg px-3 py-2 text-sm font-medium text-components-button-primary-text hover:bg-components-button-primary-bg-hover"
           >
             {aiReplyDownloadPathSaved ? '已保存 ✓' : '保存'}
           </button>
         </div>
       </div>
 
-      <div className="rounded-lg border border-blue-100 bg-blue-50 p-4">
-        <h4 className="text-sm font-medium text-blue-900 mb-2">使用说明</h4>
-        <ul className="space-y-1 text-xs text-blue-800">
+      <div className="rounded-lg border border-divider-subtle bg-state-accent-hover p-4">
+        <h4 className="text-sm font-medium text-text-accent mb-2">使用说明</h4>
+        <ul className="space-y-1 text-xs text-text-accent">
           <li>• 输入你电脑上的完整路径，如 C:\Users\33814\Desktop\report\test</li>
           <li>• 目录不存在时会自动创建</li>
           <li>• 脱敏后的文件会直接保存到该目录，同时触发浏览器下载</li>

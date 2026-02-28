@@ -180,15 +180,15 @@ export function FileRestore({ sandboxPath }: FileRestoreProps) {
   if (step === 'done') {
     return (
       <div className="text-center py-16">
-        <CheckCircleIcon className="mx-auto h-14 w-14 text-green-500" />
-        <h3 className="mt-3 text-base font-medium text-gray-900">还原完成</h3>
-        <p className="mt-1 text-sm text-gray-500">已还原 {matchCount} 处脱敏数据</p>
-        <p className="mt-1 text-xs text-gray-400">
+        <CheckCircleIcon className="mx-auto h-14 w-14 text-text-success" />
+        <h3 className="mt-3 text-base font-medium text-text-primary">还原完成</h3>
+        <p className="mt-1 text-sm text-text-tertiary">已还原 {matchCount} 处脱敏数据</p>
+        <p className="mt-1 text-xs text-text-quaternary">
           文件: {maskedFile ? getRestoredFileName(maskedFile.name) : ''} → {sandboxPath}
         </p>
         <div className="mt-6 flex items-center justify-center gap-3">
           <button onClick={handleReset}
-            className="inline-flex items-center px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700">
+            className="inline-flex items-center px-4 py-2 text-sm font-medium text-components-button-primary-text bg-components-button-primary-bg rounded-lg hover:bg-components-button-primary-bg-hover">
             继续还原其他文件
           </button>
         </div>
@@ -199,7 +199,7 @@ export function FileRestore({ sandboxPath }: FileRestoreProps) {
   return (
     <div className="space-y-6">
       {error && (
-        <div className="text-sm text-red-600 bg-red-50 px-4 py-3 rounded-lg">{error}</div>
+        <div className="text-sm text-text-destructive bg-state-destructive-hover px-4 py-3 rounded-lg">{error}</div>
       )}
 
       {/* Upload area */}
@@ -212,26 +212,26 @@ export function FileRestore({ sandboxPath }: FileRestoreProps) {
             onDragLeave={(e) => { e.preventDefault(); e.stopPropagation(); setDragging(false) }}
             onDrop={handleDrop}
             className={`rounded-xl border-2 border-dashed transition-all p-8 ${
-              dragging ? 'border-blue-400 bg-blue-50' : 'border-gray-200 bg-white hover:border-gray-300'
+              dragging ? 'border-state-accent-solid bg-state-accent-hover' : 'border-divider-regular bg-components-panel-bg hover:border-divider-deep'
             }`}
           >
             <div className="space-y-4">
               {/* Masked file */}
               <div className="flex items-center gap-4">
-                <div className="w-10 h-10 rounded-lg bg-blue-50 flex items-center justify-center shrink-0">
-                  <DocumentIcon className="h-5 w-5 text-blue-600" />
+                <div className="w-10 h-10 rounded-lg bg-state-accent-hover flex items-center justify-center shrink-0">
+                  <DocumentIcon className="h-5 w-5 text-text-accent" />
                 </div>
                 <div className="flex-1 min-w-0">
-                  <p className="text-sm font-medium text-gray-700">脱敏文件</p>
+                  <p className="text-sm font-medium text-text-secondary">脱敏文件</p>
                   {maskedFile
-                    ? <p className="text-xs text-green-600 truncate">{maskedFile.name} ({maskedContent.length} 字符)</p>
-                    : <p className="text-xs text-gray-400">选择需要还原的 .masked 文件</p>
+                    ? <p className="text-xs text-text-success truncate">{maskedFile.name} ({maskedContent.length} 字符)</p>
+                    : <p className="text-xs text-text-quaternary">选择需要还原的 .masked 文件</p>
                   }
                 </div>
                 <button
                   type="button"
                   onClick={() => maskedInputRef.current?.click()}
-                  className="text-xs text-blue-600 hover:text-blue-700 px-3 py-1.5 rounded-lg border border-blue-200 hover:bg-blue-50"
+                  className="text-xs text-text-accent hover:underline px-3 py-1.5 rounded-lg border border-divider-regular hover:bg-state-accent-hover"
                 >
                   {maskedFile ? '重新选择' : '选择文件'}
                 </button>
@@ -241,20 +241,20 @@ export function FileRestore({ sandboxPath }: FileRestoreProps) {
 
               {/* Mapping file */}
               <div className="flex items-center gap-4">
-                <div className="w-10 h-10 rounded-lg bg-orange-50 flex items-center justify-center shrink-0">
-                  <ArrowPathIcon className="h-5 w-5 text-orange-600" />
+                <div className="w-10 h-10 rounded-lg bg-state-warning-hover flex items-center justify-center shrink-0">
+                  <ArrowPathIcon className="h-5 w-5 text-text-warning" />
                 </div>
                 <div className="flex-1 min-w-0">
-                  <p className="text-sm font-medium text-gray-700">映射规则文件</p>
+                  <p className="text-sm font-medium text-text-secondary">映射规则文件</p>
                   {mappingData
-                    ? <p className="text-xs text-green-600">{mappingData.source_file} → {mappingData.rules.length} 条规则</p>
-                    : <p className="text-xs text-gray-400">选择对应的 .mapping.json 文件</p>
+                    ? <p className="text-xs text-text-success">{mappingData.source_file} → {mappingData.rules.length} 条规则</p>
+                    : <p className="text-xs text-text-quaternary">选择对应的 .mapping.json 文件</p>
                   }
                 </div>
                 <button
                   type="button"
                   onClick={() => mappingInputRef.current?.click()}
-                  className="text-xs text-blue-600 hover:text-blue-700 px-3 py-1.5 rounded-lg border border-blue-200 hover:bg-blue-50"
+                  className="text-xs text-text-accent hover:underline px-3 py-1.5 rounded-lg border border-divider-regular hover:bg-state-accent-hover"
                 >
                   {mappingData ? '重新选择' : '选择文件'}
                 </button>
@@ -264,8 +264,8 @@ export function FileRestore({ sandboxPath }: FileRestoreProps) {
 
               {!maskedFile && !mappingData && (
                 <div className="text-center pt-2">
-                  <ArrowUpTrayIcon className="mx-auto h-8 w-8 text-gray-300" />
-                  <p className="mt-2 text-xs text-gray-400">也可以将两个文件一起拖拽到此处</p>
+                  <ArrowUpTrayIcon className="mx-auto h-8 w-8 text-text-quaternary" />
+                  <p className="mt-2 text-xs text-text-quaternary">也可以将两个文件一起拖拽到此处</p>
                 </div>
               )}
             </div>
@@ -273,24 +273,24 @@ export function FileRestore({ sandboxPath }: FileRestoreProps) {
 
           {/* Usage tips */}
           {!maskedFile && (
-            <div className="bg-white rounded-xl border border-gray-100 p-5">
-              <h4 className="text-sm font-medium text-gray-700 mb-3">使用说明</h4>
+            <div className="bg-components-panel-bg rounded-xl border border-divider-regular p-5">
+              <h4 className="text-sm font-medium text-text-secondary mb-3">使用说明</h4>
               <div className="grid grid-cols-2 gap-3">
                 <div className="flex items-start gap-2">
-                  <span className="flex-shrink-0 w-5 h-5 rounded-full bg-blue-100 text-blue-600 text-xs flex items-center justify-center font-medium">1</span>
-                  <p className="text-xs text-gray-500">上传脱敏后的文件（.masked.txt / .masked.md 等）</p>
+                  <span className="flex-shrink-0 w-5 h-5 rounded-full bg-state-accent-hover text-text-accent text-xs flex items-center justify-center font-medium">1</span>
+                  <p className="text-xs text-text-tertiary">上传脱敏后的文件（.masked.txt / .masked.md 等）</p>
                 </div>
                 <div className="flex items-start gap-2">
-                  <span className="flex-shrink-0 w-5 h-5 rounded-full bg-blue-100 text-blue-600 text-xs flex items-center justify-center font-medium">2</span>
-                  <p className="text-xs text-gray-500">上传对应的映射规则文件（.mapping.json）</p>
+                  <span className="flex-shrink-0 w-5 h-5 rounded-full bg-state-accent-hover text-text-accent text-xs flex items-center justify-center font-medium">2</span>
+                  <p className="text-xs text-text-tertiary">上传对应的映射规则文件（.mapping.json）</p>
                 </div>
                 <div className="flex items-start gap-2">
-                  <span className="flex-shrink-0 w-5 h-5 rounded-full bg-blue-100 text-blue-600 text-xs flex items-center justify-center font-medium">3</span>
-                  <p className="text-xs text-gray-500">确认映射规则，预览还原效果</p>
+                  <span className="flex-shrink-0 w-5 h-5 rounded-full bg-state-accent-hover text-text-accent text-xs flex items-center justify-center font-medium">3</span>
+                  <p className="text-xs text-text-tertiary">确认映射规则，预览还原效果</p>
                 </div>
                 <div className="flex items-start gap-2">
-                  <span className="flex-shrink-0 w-5 h-5 rounded-full bg-blue-100 text-blue-600 text-xs flex items-center justify-center font-medium">4</span>
-                  <p className="text-xs text-gray-500">执行还原，文件自动保存到沙箱并下载</p>
+                  <span className="flex-shrink-0 w-5 h-5 rounded-full bg-state-accent-hover text-text-accent text-xs flex items-center justify-center font-medium">4</span>
+                  <p className="text-xs text-text-tertiary">执行还原，文件自动保存到沙箱并下载</p>
                 </div>
               </div>
             </div>
@@ -301,33 +301,33 @@ export function FileRestore({ sandboxPath }: FileRestoreProps) {
       {/* Confirm rules */}
       {step === 'confirm' && mappingData && (
         <>
-          <div className="flex items-center justify-between bg-white rounded-lg border border-gray-100 px-4 py-3">
-            <div className="flex items-center gap-2 text-sm text-gray-600">
-              <DocumentIcon className="h-4 w-4 text-gray-400" />
+          <div className="flex items-center justify-between bg-components-panel-bg rounded-lg border border-divider-regular px-4 py-3">
+            <div className="flex items-center gap-2 text-sm text-text-secondary">
+              <DocumentIcon className="h-4 w-4 text-text-quaternary" />
               <span className="font-medium">{maskedFile?.name}</span>
-              <span className="text-gray-400">·</span>
-              <span className="text-gray-400">来源: {mappingData.source_file}</span>
-              <span className="text-gray-400">·</span>
-              <span className="text-gray-400">{mappingData.created_at ? new Date(mappingData.created_at).toLocaleString('zh-CN') : ''}</span>
+              <span className="text-text-quaternary">·</span>
+              <span className="text-text-quaternary">来源: {mappingData.source_file}</span>
+              <span className="text-text-quaternary">·</span>
+              <span className="text-text-quaternary">{mappingData.created_at ? new Date(mappingData.created_at).toLocaleString('zh-CN') : ''}</span>
             </div>
-            <button onClick={handleReset} className="text-xs text-gray-500 hover:text-gray-700">重新选择</button>
+            <button onClick={handleReset} className="text-xs text-text-tertiary hover:text-text-secondary">重新选择</button>
           </div>
 
-          <div className="bg-white rounded-xl border border-gray-100 p-4">
+          <div className="bg-components-panel-bg rounded-xl border border-divider-regular p-4">
             <div className="flex items-center gap-2 mb-3">
-              <ArrowPathIcon className="h-4 w-4 text-orange-600" />
-              <label className="text-sm font-medium text-gray-700">
+              <ArrowPathIcon className="h-4 w-4 text-text-warning" />
+              <label className="text-sm font-medium text-text-secondary">
                 映射规则 ({mappingData.rules.length} 条)
               </label>
             </div>
             <div className="space-y-1 max-h-72 overflow-y-auto">
               {mappingData.rules.map((rule, idx) => (
-                <div key={idx} className="flex items-center gap-3 p-2 border border-gray-200 rounded-md text-sm">
-                  <span className="text-xs px-1.5 py-0.5 rounded bg-gray-100 text-gray-500 shrink-0">{rule.label}</span>
-                  <span className="text-blue-600 font-mono text-xs">{rule.replacement}</span>
-                  <span className="text-xs text-gray-300">→</span>
-                  <span className="text-gray-900 font-medium text-xs">{rule.original}</span>
-                  <span className="text-xs text-gray-400 ml-auto">×{rule.count}</span>
+                <div key={idx} className="flex items-center gap-3 p-2 border border-divider-regular rounded-md text-sm">
+                  <span className="text-xs px-1.5 py-0.5 rounded bg-background-section text-text-tertiary shrink-0">{rule.label}</span>
+                  <span className="text-text-accent font-mono text-xs">{rule.replacement}</span>
+                  <span className="text-xs text-text-quaternary">→</span>
+                  <span className="text-text-primary font-medium text-xs">{rule.original}</span>
+                  <span className="text-xs text-text-quaternary ml-auto">×{rule.count}</span>
                 </div>
               ))}
             </div>
@@ -337,16 +337,16 @@ export function FileRestore({ sandboxPath }: FileRestoreProps) {
 
       {/* Preview */}
       {step === 'preview' && preview && (
-        <div className="bg-white rounded-xl border border-gray-100 p-4">
+        <div className="bg-components-panel-bg rounded-xl border border-divider-regular p-4">
           <div className="flex items-center justify-between mb-3">
             <div className="flex items-center gap-2">
-              <EyeIcon className="h-4 w-4 text-blue-600" />
-              <label className="text-sm font-medium text-gray-700">还原预览 (还原 {matchCount} 处)</label>
+              <EyeIcon className="h-4 w-4 text-text-accent" />
+              <label className="text-sm font-medium text-text-secondary">还原预览 (还原 {matchCount} 处)</label>
             </div>
-            <button onClick={() => setStep('confirm')} className="text-xs text-blue-600 hover:underline">返回确认</button>
+            <button onClick={() => setStep('confirm')} className="text-xs text-text-accent hover:underline">返回确认</button>
           </div>
-          <div className="p-4 bg-gray-50 border border-gray-200 rounded-lg max-h-80 overflow-y-auto">
-            <pre className="text-xs text-gray-700 whitespace-pre-wrap font-mono">{preview}</pre>
+          <div className="p-4 bg-background-section border border-divider-regular rounded-lg max-h-80 overflow-y-auto">
+            <pre className="text-xs text-text-secondary whitespace-pre-wrap font-mono">{preview}</pre>
           </div>
         </div>
       )}
@@ -357,18 +357,18 @@ export function FileRestore({ sandboxPath }: FileRestoreProps) {
           {step === 'confirm' && (
             <button type="button" onClick={handlePreview}
               disabled={!maskedContent || !mappingData}
-              className="inline-flex items-center gap-2 rounded-lg bg-blue-600 px-5 py-2.5 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed">
+              className="inline-flex items-center gap-2 rounded-lg bg-components-button-primary-bg px-5 py-2.5 text-sm font-medium text-components-button-primary-text hover:bg-components-button-primary-bg-hover disabled:opacity-50 disabled:cursor-not-allowed">
               <EyeIcon className="h-4 w-4" />预览还原
             </button>
           )}
           {step === 'preview' && (
             <button type="button" onClick={handleExecute}
-              className="inline-flex items-center gap-2 rounded-lg bg-blue-600 px-5 py-2.5 text-sm font-medium text-white hover:bg-blue-700">
+              className="inline-flex items-center gap-2 rounded-lg bg-components-button-primary-bg px-5 py-2.5 text-sm font-medium text-components-button-primary-text hover:bg-components-button-primary-bg-hover">
               <PlayIcon className="h-4 w-4" />执行还原并保存
             </button>
           )}
           <button type="button" onClick={handleReset}
-            className="inline-flex items-center gap-2 rounded-lg border border-gray-300 bg-white px-4 py-2.5 text-sm font-medium text-gray-500 hover:bg-gray-50">
+            className="inline-flex items-center gap-2 rounded-lg border border-components-button-secondary-border bg-components-button-secondary-bg px-4 py-2.5 text-sm font-medium text-components-button-secondary-text hover:bg-components-button-secondary-bg-hover">
             重新开始
           </button>
         </div>

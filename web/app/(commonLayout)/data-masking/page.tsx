@@ -28,12 +28,12 @@ type TabType = 'mask' | 'restore' | 'rules' | 'files' | 'transfer' | 'sandbox'
 function NeedSandbox() {
   return (
     <div className="flex flex-col items-center justify-center py-20 text-center">
-      <RiSettings4Line className="w-12 h-12 text-gray-300 mb-4" />
-      <h3 className="text-sm font-medium text-gray-900 mb-1">请先配置沙箱路径</h3>
-      <p className="text-xs text-gray-500 mb-4">脱敏文件将保存到沙箱目录</p>
+      <RiSettings4Line className="w-12 h-12 text-text-quaternary mb-4" />
+      <h3 className="text-sm font-medium text-text-primary mb-1">请先配置沙箱路径</h3>
+      <p className="text-xs text-text-tertiary mb-4">脱敏文件将保存到沙箱目录</p>
       <a
         href="/data-masking?tab=sandbox"
-        className="px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700"
+        className="px-4 py-2 text-sm font-medium text-components-button-primary-text bg-components-button-primary-bg rounded-lg hover:bg-components-button-primary-bg-hover"
       >
         前往配置
       </a>
@@ -59,20 +59,20 @@ function RulesPanel({
   onRefresh: () => void
 }) {
   if (isLoading) {
-    return <div className="flex items-center justify-center py-12 text-sm text-gray-500">加载中...</div>
+    return <div className="flex items-center justify-center py-12 text-sm text-text-tertiary">加载中...</div>
   }
 
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between">
-        <span className="text-sm text-gray-500">{rules.length} 条规则</span>
+        <span className="text-sm text-text-tertiary">{rules.length} 条规则</span>
         <div className="flex items-center gap-2">
-          <button onClick={onRefresh} className="p-1.5 rounded hover:bg-gray-100" title="刷新">
-            <RiRefreshLine className="w-4 h-4 text-gray-500" />
+          <button onClick={onRefresh} className="p-1.5 rounded hover:bg-state-base-hover" title="刷新">
+            <RiRefreshLine className="w-4 h-4 text-text-tertiary" />
           </button>
           <button
             onClick={onAdd}
-            className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700"
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium text-components-button-primary-text bg-components-button-primary-bg rounded-lg hover:bg-components-button-primary-bg-hover"
           >
             <RiAddLine className="w-4 h-4" />新建规则
           </button>
@@ -81,43 +81,43 @@ function RulesPanel({
 
       {rules.length === 0 ? (
         <div className="text-center py-12">
-          <RiShieldCheckLine className="mx-auto w-12 h-12 text-gray-300 mb-3" />
-          <p className="text-sm text-gray-500">暂无脱敏规则</p>
-          <p className="text-xs text-gray-400 mt-1">点击「新建规则」或使用预设模板快速创建</p>
+          <RiShieldCheckLine className="mx-auto w-12 h-12 text-text-quaternary mb-3" />
+          <p className="text-sm text-text-tertiary">暂无脱敏规则</p>
+          <p className="text-xs text-text-quaternary mt-1">点击「新建规则」或使用预设模板快速创建</p>
         </div>
       ) : (
         <div className="space-y-2">
           {rules.map(rule => (
             <div
               key={rule.id}
-              className={`border rounded-lg p-3 transition-colors ${rule.enabled ? 'border-gray-200 bg-white' : 'border-gray-100 bg-gray-50 opacity-60'}`}
+              className={`border rounded-lg p-3 transition-colors ${rule.enabled ? 'border-divider-regular bg-components-panel-bg' : 'border-divider-subtle bg-background-section opacity-60'}`}
             >
               <div className="flex items-start justify-between">
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2">
-                    <span className="text-sm font-medium text-gray-900 truncate">{rule.name}</span>
-                    <span className="text-xs px-1.5 py-0.5 rounded bg-gray-100 text-gray-500">
+                    <span className="text-sm font-medium text-text-primary truncate">{rule.name}</span>
+                    <span className="text-xs px-1.5 py-0.5 rounded bg-background-section text-text-tertiary">
                       {rule.strategy.type}
                     </span>
                   </div>
                   {rule.description && (
-                    <p className="text-xs text-gray-500 mt-0.5 truncate">{rule.description}</p>
+                    <p className="text-xs text-text-tertiary mt-0.5 truncate">{rule.description}</p>
                   )}
-                  <p className="text-xs text-gray-400 mt-1 font-mono truncate">
+                  <p className="text-xs text-text-quaternary mt-1 font-mono truncate">
                     {typeof rule.pattern === 'string' ? rule.pattern : rule.pattern.source}
                   </p>
                 </div>
                 <div className="flex items-center gap-1 ml-3 shrink-0">
-                  <button onClick={() => onToggle(rule.id)} className="p-1 rounded hover:bg-gray-100" title={rule.enabled ? '禁用' : '启用'}>
+                  <button onClick={() => onToggle(rule.id)} className="p-1 rounded hover:bg-state-base-hover" title={rule.enabled ? '禁用' : '启用'}>
                     {rule.enabled
-                      ? <RiToggleFill className="w-5 h-5 text-blue-600" />
-                      : <RiToggleLine className="w-5 h-5 text-gray-400" />}
+                      ? <RiToggleFill className="w-5 h-5 text-text-accent" />
+                      : <RiToggleLine className="w-5 h-5 text-text-quaternary" />}
                   </button>
-                  <button onClick={() => onEdit(rule)} className="p-1 rounded hover:bg-gray-100" title="编辑">
-                    <RiEditLine className="w-4 h-4 text-gray-500" />
+                  <button onClick={() => onEdit(rule)} className="p-1 rounded hover:bg-state-base-hover" title="编辑">
+                    <RiEditLine className="w-4 h-4 text-text-tertiary" />
                   </button>
-                  <button onClick={() => onDelete(rule.id)} className="p-1 rounded hover:bg-gray-100" title="删除">
-                    <RiDeleteBinLine className="w-4 h-4 text-red-400" />
+                  <button onClick={() => onDelete(rule.id)} className="p-1 rounded hover:bg-state-base-hover" title="删除">
+                    <RiDeleteBinLine className="w-4 h-4 text-text-destructive" />
                   </button>
                 </div>
               </div>
@@ -232,10 +232,10 @@ function DataMaskingPage() {
     <div className="relative flex h-0 shrink-0 grow flex-col overflow-y-auto bg-background-body">
       {/* Top header bar */}
       <div className="sticky top-0 z-10 flex items-center justify-between bg-background-body px-12 pb-4 pt-7">
-        <h2 className="text-lg font-semibold text-gray-900">{TAB_TITLES[activeTab]}</h2>
+        <h2 className="text-lg font-semibold text-text-primary">{TAB_TITLES[activeTab]}</h2>
         {sandboxPath && (
-          <div className="flex items-center gap-1.5 text-xs text-gray-400 bg-gray-50 rounded-lg px-3 py-1.5 border border-gray-100">
-            <RiFolderLine className="w-3.5 h-3.5 text-gray-400" />
+          <div className="flex items-center gap-1.5 text-xs text-text-quaternary bg-background-section rounded-lg px-3 py-1.5 border border-divider-subtle">
+            <RiFolderLine className="w-3.5 h-3.5 text-text-quaternary" />
             <span className="truncate max-w-[300px]" title={sandboxPath}>{sandboxPath}</span>
           </div>
         )}

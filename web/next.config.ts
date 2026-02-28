@@ -67,6 +67,7 @@ const nextConfig: NextConfig = {
   compiler: {
     removeConsole: isDev ? false : { exclude: ['warn', 'error'] },
   },
+  devIndicators: false,
   experimental: {
     turbopackFileSystemCacheForDev: false,
   },

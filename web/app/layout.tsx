@@ -15,6 +15,7 @@ import { ReactScanLoader } from './components/devtools/react-scan/loader'
 import { I18nServerProvider } from './components/provider/i18n-server'
 import { PWAProvider } from './components/provider/serwist'
 import SentryInitializer from './components/sentry-initializer'
+import DevErrorSuppressor from './components/dev-error-suppressor'
 import RoutePrefixHandle from './routePrefixHandle'
 import './styles/globals.css'
 import './styles/markdown.scss'
@@ -90,6 +91,7 @@ const LocaleLayout = async ({
         {...datasetMap}
       >
         <PWAProvider>
+          <DevErrorSuppressor />
           <ReactScanLoader />
           <JotaiProvider>
             <ThemeProvider
