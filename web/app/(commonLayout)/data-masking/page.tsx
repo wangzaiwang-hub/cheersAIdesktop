@@ -16,27 +16,20 @@ import { useSearchParams } from 'next/navigation'
 import useDocumentTitle from '@/hooks/use-document-title'
 import { RulesManager } from '@/lib/data-masking/rules-manager'
 import type { MaskingRule } from '@/lib/data-masking/types'
-import { SandboxConfig } from '@/app/components/data-masking/sandbox-config'
 import { FileMasking } from '@/app/components/data-masking/file-masking'
 import { FileList } from '@/app/components/data-masking/file-list'
 import { FileRestore } from '@/app/components/data-masking/file-restore'
 import { SandboxTransfer } from '@/app/components/data-masking/sandbox-transfer'
 import { RuleForm } from '@/app/components/data-masking/rule-form'
 
-type TabType = 'mask' | 'restore' | 'rules' | 'files' | 'transfer' | 'sandbox'
+type TabType = 'mask' | 'restore' | 'rules' | 'files' | 'transfer'
 
 function NeedSandbox() {
   return (
     <div className="flex flex-col items-center justify-center py-20 text-center">
       <RiSettings4Line className="w-12 h-12 text-text-quaternary mb-4" />
       <h3 className="text-sm font-medium text-text-primary mb-1">请先配置沙箱路径</h3>
-      <p className="text-xs text-text-tertiary mb-4">脱敏文件将保存到沙箱目录</p>
-      <a
-        href="/data-masking?tab=sandbox"
-        className="px-4 py-2 text-sm font-medium text-components-button-primary-text bg-components-button-primary-bg rounded-lg hover:bg-components-button-primary-bg-hover"
-      >
-        前往配置
-      </a>
+      <p className="text-xs text-text-tertiary mb-4">请在「设置 → 数据安全」中配置沙箱目录</p>
     </div>
   )
 }
@@ -166,10 +159,6 @@ function DataMaskingPage() {
     finally { setIsLoading(false) }
   }, [])
 
-  const handleSandboxConfigured = useCallback((path: string) => {
-    setSandboxPath(path)
-  }, [])
-
   const handleCreateRule = useCallback(async (data: Omit<MaskingRule, 'id' | 'createdAt' | 'updatedAt'>) => {
     const mgr = rulesManagerRef.current
     if (!mgr) return
@@ -225,7 +214,6 @@ function DataMaskingPage() {
     rules: '脱敏规则',
     files: '文件管理',
     transfer: '导出导入',
-    sandbox: '沙箱配置',
   }
 
   return (
@@ -277,10 +265,6 @@ function DataMaskingPage() {
           needsSandbox
             ? <NeedSandbox />
             : <SandboxTransfer sandboxPath={sandboxPath} />
-        )}
-
-        {activeTab === 'sandbox' && (
-          <SandboxConfig onConfigured={handleSandboxConfigured} />
         )}
       </div>
 

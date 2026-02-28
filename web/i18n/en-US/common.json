@@ -560,6 +560,7 @@
   "settings.accountGroup": "GENERAL",
   "settings.apiBasedExtension": "API Extension",
   "settings.billing": "Billing",
+  "settings.dataSecurity": "Data Security",
   "settings.dataSource": "Data Source",
   "settings.generalGroup": "GENERAL",
   "settings.integrations": "Integrations",

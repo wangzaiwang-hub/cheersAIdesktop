@@ -81,6 +81,7 @@ from .provider import (
 )
 from .source import DataSourceApiKeyAuthBinding, DataSourceOauthBinding
 from .task import CeleryTask, CeleryTaskSet
+from .user_config import UserConfig
 from .tools import (
     ApiToolProvider,
     BuiltinToolProvider,
@@ -199,6 +200,7 @@ __all__ = [
     "TriggerOAuthTenantClient",
     "TriggerSubscription",
     "UploadFile",
+    "UserConfig",
     "UserFrom",
     "Whitelist",
     "Workflow",

@@ -26,7 +26,6 @@ import {
   RiPuzzle2Fill,
   RiPuzzle2Line,
   RiRobot3Line,
-  RiSettings4Line,
   RiShieldCheckFill,
   RiShieldCheckLine,
   RiToolsLine,
@@ -124,7 +123,6 @@ const SideNav = () => {
     { id: 'rules', href: '/data-masking?tab=rules', icon: <RiShieldCheckLine className="h-4 w-4" />, label: '脱敏规则' },
     { id: 'files', href: '/data-masking?tab=files', icon: <RiFolderShield2Line className="h-4 w-4" />, label: '文件管理' },
     { id: 'transfer', href: '/data-masking?tab=transfer', icon: <RiExchange2Line className="h-4 w-4" />, label: '导出导入' },
-    { id: 'sandbox', href: '/data-masking?tab=sandbox', icon: <RiSettings4Line className="h-4 w-4" />, label: '沙箱配置' },
   ]
 
   // 脱敏沙箱
