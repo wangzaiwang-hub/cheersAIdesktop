@@ -218,3 +218,33 @@ export async function hash(data: string): Promise<string> {
 
   throw new Error('No crypto implementation available')
 }
+
+/**
+ * 生成随机加密口令（至少32个字符）
+ * @param length - 口令长度（默认32）
+ * @returns 随机口令字符串
+ */
+export function generatePassphrase(length: number = 32): string {
+  const charset = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789!@#$%^&*'
+  
+  if (typeof window !== 'undefined' && window.crypto) {
+    // 浏览器环境
+    const array = new Uint8Array(length)
+    window.crypto.getRandomValues(array)
+    return Array.from(array, byte => charset[byte % charset.length]).join('')
+  }
+
+  if (typeof require !== 'undefined') {
+    // Node.js 环境
+    const crypto = require('crypto')
+    const bytes = crypto.randomBytes(length)
+    return Array.from(bytes, (byte: number) => charset[byte % charset.length]).join('')
+  }
+
+  // 降级方案：使用 Math.random()
+  let result = ''
+  for (let i = 0; i < length; i++) {
+    result += charset[Math.floor(Math.random() * charset.length)]
+  }
+  return result
+}

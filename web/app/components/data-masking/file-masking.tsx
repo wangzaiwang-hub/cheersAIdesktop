@@ -16,6 +16,7 @@ import {
 } from '@heroicons/react/24/outline'
 import { saveSandboxFile, scanEntities, extractTextFromFile } from '@/service/sandbox-files'
 import type { NerEntity } from '@/service/sandbox-files'
+import { encrypt, generateKey } from '@/lib/data-masking/crypto-utils'
 
 // Text-based formats readable in browser
 const TEXT_EXTENSIONS = new Set(['.md', '.txt', '.csv', '.json', '.xml', '.yaml', '.yml', '.log', '.conf', '.ini', '.toml', '.html', '.htm', '.css', '.js', '.ts', '.py', '.java', '.sql', '.sh', '.bat'])
@@ -104,7 +105,7 @@ function applyEntityMasking(
   return { masked, count: totalCount }
 }
 
-type Step = 'upload' | 'scanning' | 'confirm' | 'preview' | 'done'
+type Step = 'upload' | 'scanning' | 'confirm' | 'preview' | 'encryption-setup' | 'done'
 
 export function FileMasking({ sandboxPath }: FileMaskingProps) {
   const [step, setStep] = useState<Step>('upload')
@@ -121,6 +122,10 @@ export function FileMasking({ sandboxPath }: FileMaskingProps) {
   const [extractProgress, setExtractProgress] = useState(0)
   const [needsOcr, setNeedsOcr] = useState(false)
   const [ocrRunning, setOcrRunning] = useState(false)
+  const [encryptionKey, setEncryptionKey] = useState('')
+  const [showKey, setShowKey] = useState(false)
+  const [useCustomKey, setUseCustomKey] = useState(false)
+  const [savingFiles, setSavingFiles] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
   const dropRef = useRef<HTMLDivElement>(null)
 
@@ -308,6 +313,22 @@ export function FileMasking({ sandboxPath }: FileMaskingProps) {
   const handleExecute = async () => {
     if (!selectedFile || !maskedContent) return
     setError('')
+    
+    // 检查是否启用了加密
+    const encryptionEnabled = localStorage.getItem('mapping_encryption_enabled')
+    if (encryptionEnabled === 'false') {
+      // 不加密，直接保存
+      await handleSaveWithoutEncryption()
+    } else {
+      // 显示加密设置界面
+      setStep('encryption-setup')
+    }
+  }
+
+  const handleSaveWithoutEncryption = async () => {
+    if (!selectedFile || !maskedContent) return
+    setSavingFiles(true)
+    setError('')
     const maskedFileName = getMaskedFileName(selectedFile.name)
     const messages: string[] = []
 
@@ -357,10 +378,10 @@ export function FileMasking({ sandboxPath }: FileMaskingProps) {
       catch (saveErr) {
         messages.push(`脱敏文件保存失败: ${saveErr instanceof Error ? saveErr.message : saveErr}`)
       }
-      // Save mapping rules
+      // Save unencrypted mapping rules
       try {
         await saveSandboxFile(sandboxPath, mappingFileName, mappingJson)
-        messages.push(`映射规则已保存`)
+        messages.push(`映射规则已保存（未加密）`)
       }
       catch (saveErr) {
         messages.push(`映射规则保存失败: ${saveErr instanceof Error ? saveErr.message : saveErr}`)
@@ -383,6 +404,7 @@ export function FileMasking({ sandboxPath }: FileMaskingProps) {
       messages.push('浏览器下载失败')
     }
 
+    setSavingFiles(false)
     const hasError = messages.some(m => m.includes('失败'))
     if (hasError)
       setError(messages.join('；'))
@@ -404,6 +426,126 @@ export function FileMasking({ sandboxPath }: FileMaskingProps) {
     setExtractProgress(0)
     setNeedsOcr(false)
     setOcrRunning(false)
+    setEncryptionKey('')
+    setShowKey(false)
+    setUseCustomKey(false)
+    setSavingFiles(false)
+  }
+
+  const handleGenerateKey = () => {
+    const key = generateKey(16) // 生成32位十六进制字符串（16字节）
+    setEncryptionKey(key)
+    setShowKey(true)
+  }
+
+  const handleConfirmEncryption = async () => {
+    if (!selectedFile || !maskedContent) return
+    if (!encryptionKey || encryptionKey.length < 32) {
+      setError('加密口令必须至少32位字符')
+      return
+    }
+
+    setSavingFiles(true)
+    setError('')
+    const maskedFileName = getMaskedFileName(selectedFile.name)
+    const messages: string[] = []
+
+    // Build mapping rules for reverse masking
+    const mappingRules: { original: string; replacement: string; label: string; type: string; count: string }[] = []
+    for (const e of entities) {
+      if (e.checked) {
+        mappingRules.push({
+          original: e.text,
+          replacement: e.replacement,
+          label: e.label,
+          type: e.type,
+          count: e.count,
+        })
+      }
+    }
+    for (const mr of manualReplacements) {
+      if (mr.find.length > 0) {
+        const cnt = fileContent.split(mr.find).length - 1
+        mappingRules.push({
+          original: mr.find,
+          replacement: mr.replace,
+          label: '手动替换',
+          type: 'manual',
+          count: String(cnt),
+        })
+      }
+    }
+
+    const mappingData = {
+      version: '1.0',
+      source_file: selectedFile.name,
+      masked_file: maskedFileName,
+      created_at: new Date().toISOString(),
+      total_replacements: matchCount,
+      rules: mappingRules,
+    }
+    const mappingJson = JSON.stringify(mappingData, null, 2)
+
+    // Encrypt mapping data
+    let encryptedMappingJson: string
+    try {
+      encryptedMappingJson = await encrypt(mappingJson, encryptionKey)
+    }
+    catch (encErr) {
+      setSavingFiles(false)
+      setError(`加密失败: ${encErr instanceof Error ? encErr.message : encErr}`)
+      return
+    }
+
+    const encryptedMappingData = {
+      version: '1.0',
+      encrypted: true,
+      data: encryptedMappingJson,
+    }
+    const encryptedMappingJsonStr = JSON.stringify(encryptedMappingData, null, 2)
+    const mappingFileName = getMappingFileName(selectedFile.name)
+
+    if (sandboxPath) {
+      // Save masked file
+      try {
+        const result = await saveSandboxFile(sandboxPath, maskedFileName, maskedContent)
+        messages.push(`脱敏文件已保存到 ${result.file_path}`)
+      }
+      catch (saveErr) {
+        messages.push(`脱敏文件保存失败: ${saveErr instanceof Error ? saveErr.message : saveErr}`)
+      }
+      // Save encrypted mapping rules
+      try {
+        await saveSandboxFile(sandboxPath, mappingFileName, encryptedMappingJsonStr)
+        messages.push(`加密映射规则已保存`)
+      }
+      catch (saveErr) {
+        messages.push(`映射规则保存失败: ${saveErr instanceof Error ? saveErr.message : saveErr}`)
+      }
+    }
+
+    try {
+      const blob = new Blob([maskedContent], { type: 'text/markdown;charset=utf-8' })
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = maskedFileName
+      document.body.appendChild(a)
+      a.click()
+      document.body.removeChild(a)
+      URL.revokeObjectURL(url)
+      messages.push('浏览器下载已触发')
+    }
+    catch {
+      messages.push('浏览器下载失败')
+    }
+
+    setSavingFiles(false)
+    const hasError = messages.some(m => m.includes('失败'))
+    if (hasError)
+      setError(messages.join('；'))
+    else
+      setStep('done')
   }
 
   // Done state
@@ -712,6 +854,165 @@ export function FileMasking({ sandboxPath }: FileMaskingProps) {
           </div>
           <div className="p-4 bg-background-section border border-divider-regular rounded-lg max-h-80 overflow-y-auto">
             <pre className="text-xs text-text-secondary whitespace-pre-wrap font-mono">{preview}</pre>
+          </div>
+        </div>
+      )}
+
+      {/* Encryption Setup */}
+      {step === 'encryption-setup' && (
+        <div className="bg-components-panel-bg rounded-xl border border-divider-regular p-6">
+          <div className="flex items-center gap-2 mb-4">
+            <ShieldCheckIcon className="h-5 w-5 text-text-warning" />
+            <h3 className="text-base font-medium text-text-primary">设置映射文件加密口令</h3>
+          </div>
+          <p className="text-sm text-text-tertiary mb-6">
+            映射文件包含原始敏感数据，建议使用加密口令进行加密保护。请妥善保管此口令，反脱敏时需要使用。
+          </p>
+
+          <div className="space-y-4">
+            {/* Key generation options */}
+            <div className="flex items-center gap-4">
+              <label className="flex items-center gap-2 cursor-pointer">
+                <input
+                  type="radio"
+                  checked={!useCustomKey}
+                  onChange={() => {
+                    setUseCustomKey(false)
+                    setEncryptionKey('')
+                    setShowKey(false)
+                  }}
+                  className="h-4 w-4 text-state-accent-solid border-divider-regular"
+                />
+                <span className="text-sm text-text-secondary">系统生成（推荐）</span>
+              </label>
+              <label className="flex items-center gap-2 cursor-pointer">
+                <input
+                  type="radio"
+                  checked={useCustomKey}
+                  onChange={() => {
+                    setUseCustomKey(true)
+                    setEncryptionKey('')
+                    setShowKey(true)
+                  }}
+                  className="h-4 w-4 text-state-accent-solid border-divider-regular"
+                />
+                <span className="text-sm text-text-secondary">自定义口令</span>
+              </label>
+            </div>
+
+            {/* System generated key */}
+            {!useCustomKey && (
+              <div className="space-y-3">
+                {!encryptionKey ? (
+                  <button
+                    type="button"
+                    onClick={handleGenerateKey}
+                    className="inline-flex items-center gap-2 rounded-lg bg-components-button-primary-bg px-4 py-2 text-sm font-medium text-components-button-primary-text hover:bg-components-button-primary-bg-hover"
+                  >
+                    生成32位加密口令
+                  </button>
+                ) : (
+                  <div className="space-y-2">
+                    <div className="flex items-center gap-2">
+                      <div className="flex-1 relative">
+                        <input
+                          type={showKey ? 'text' : 'password'}
+                          value={encryptionKey}
+                          readOnly
+                          className="w-full text-sm border border-divider-regular bg-background-section rounded px-3 py-2 text-text-primary font-mono"
+                        />
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => setShowKey(!showKey)}
+                        className="px-3 py-2 text-sm text-text-accent hover:underline"
+                      >
+                        {showKey ? '隐藏' : '显示'}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          navigator.clipboard.writeText(encryptionKey)
+                        }}
+                        className="px-3 py-2 text-sm text-text-accent hover:underline"
+                      >
+                        复制
+                      </button>
+                    </div>
+                    <p className="text-xs text-text-warning">
+                      ⚠️ 请务必保存此口令！反脱敏时需要使用，丢失后无法恢复原始数据。
+                    </p>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* Custom key input */}
+            {useCustomKey && (
+              <div className="space-y-2">
+                <div className="flex items-center gap-2">
+                  <input
+                    type={showKey ? 'text' : 'password'}
+                    value={encryptionKey}
+                    onChange={(e) => setEncryptionKey(e.target.value)}
+                    placeholder="请输入至少32位字符的加密口令"
+                    className="flex-1 text-sm border border-divider-regular bg-components-input-bg-normal rounded px-3 py-2 text-text-primary focus:ring-1 focus:ring-state-accent-solid focus:border-state-accent-solid"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowKey(!showKey)}
+                    className="px-3 py-2 text-sm text-text-accent hover:underline"
+                  >
+                    {showKey ? '隐藏' : '显示'}
+                  </button>
+                </div>
+                <p className="text-xs text-text-tertiary">
+                  口令长度: {encryptionKey.length} / 32 (最少)
+                </p>
+                {encryptionKey.length > 0 && encryptionKey.length < 32 && (
+                  <p className="text-xs text-text-warning">
+                    口令长度不足，请输入至少32位字符
+                  </p>
+                )}
+              </div>
+            )}
+          </div>
+
+          <div className="flex gap-3 mt-6 pt-4 border-t border-divider-regular">
+            <button
+              type="button"
+              onClick={handleConfirmEncryption}
+              disabled={!encryptionKey || encryptionKey.length < 32 || savingFiles}
+              className="inline-flex items-center gap-2 rounded-lg bg-components-button-primary-bg px-5 py-2.5 text-sm font-medium text-components-button-primary-text hover:bg-components-button-primary-bg-hover disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              {savingFiles ? (
+                <>
+                  <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+                  保存中...
+                </>
+              ) : (
+                <>
+                  <PlayIcon className="h-4 w-4" />
+                  加密并保存
+                </>
+              )}
+            </button>
+            <button
+              type="button"
+              onClick={handleSaveWithoutEncryption}
+              disabled={savingFiles}
+              className="inline-flex items-center gap-2 rounded-lg border border-components-button-secondary-border bg-components-button-secondary-bg px-4 py-2.5 text-sm font-medium text-components-button-secondary-text hover:bg-components-button-secondary-bg-hover disabled:opacity-50"
+            >
+              {savingFiles ? '保存中...' : '跳过加密'}
+            </button>
+            <button
+              type="button"
+              onClick={() => setStep('preview')}
+              disabled={savingFiles}
+              className="inline-flex items-center gap-2 rounded-lg border border-components-button-secondary-border bg-components-button-secondary-bg px-4 py-2.5 text-sm font-medium text-components-button-secondary-text hover:bg-components-button-secondary-bg-hover disabled:opacity-50"
+            >
+              返回预览
+            </button>
           </div>
         </div>
       )}
