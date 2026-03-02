@@ -236,6 +236,9 @@ scripts/stress-test/reports/
 
 # settings
 *.local.json
+
 *.local.md
 *.pid
-web/.eslintcache
+
+*.eslintcache
+.eslintcache
