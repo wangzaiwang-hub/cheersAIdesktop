@@ -199,6 +199,18 @@ const SideNav = () => {
     })
   }
 
+  // 审计日志
+  if (!isCurrentWorkspaceDatasetOperator) {
+    navItems.push({
+      id: 'audit-logs',
+      href: '/audit-logs',
+      icon: <RiFileShield2Line className="h-5 w-5" />,
+      activeIcon: <RiFileShield2Line className="h-5 w-5" />,
+      label: '审计日志',
+      segments: ['audit-logs'],
+    })
+  }
+
   // Auto-expand the active nav item on mount / segment change
   useEffect(() => {
     const activeItem = navItems.find(item => item.segments.includes(segment ?? ''))

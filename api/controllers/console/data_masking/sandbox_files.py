@@ -11,6 +11,8 @@ from pathlib import Path
 
 from flask import Blueprint, request
 
+from services.audit_service import log_operation
+
 sandbox_bp = Blueprint("sandbox_files", __name__, url_prefix="/console/api/data-masking/sandbox")
 
 SANDBOX_BASE = os.environ.get("DATA_MASKING_SANDBOX_PATH", "")
@@ -120,6 +122,17 @@ def delete_file():
         if not file_path.exists():
             return {"error": "File not found"}, 404
         file_path.unlink()
+        
+        # 记录审计日志
+        log_operation(
+            action="file_delete",
+            content={
+                "file_name": file_name,
+                "sandbox_path": sandbox_path,
+            },
+            resource_type="file",
+        )
+        
         return {"result": "success"}
     except ValueError as e:
         return {"error": str(e)}, 400
