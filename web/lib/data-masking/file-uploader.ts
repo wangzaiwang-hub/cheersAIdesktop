@@ -1,13 +1,13 @@
 /**
  * 文件上传器
  * File Uploader
- * 
+ *
  * 负责将脱敏文件上传到 Dify 后端
  */
 
-import type { UploadResult, UploadProgressCallback } from './types'
-import { UploadError } from './types'
 import type { SandboxManager } from './sandbox-manager'
+import type { UploadProgressCallback, UploadResult } from './types'
+import { UploadError } from './types'
 
 /**
  * 文件上传器类
@@ -95,7 +95,7 @@ export class FileUploader {
         // 如果不是最后一次尝试，等待后重试
         if (attempt < this.maxRetries - 1) {
           // 指数退避：2^attempt * 1000ms
-          const delay = Math.pow(2, attempt) * 1000
+          const delay = 2 ** attempt * 1000
           await this.sleep(delay)
         }
       }
@@ -120,10 +120,10 @@ export class FileUploader {
   ): Promise<UploadResult> {
     // 创建 FormData
     const formData = new FormData()
-    
+
     // 从文件路径提取文件名
     const fileName = filePath.split('/').pop() || filePath.split('\\').pop() || 'file.txt'
-    
+
     // 创建 Blob 对象
     const blob = new Blob([fileContent], { type: 'text/plain' })
     formData.append('file', blob, fileName)
@@ -131,6 +131,12 @@ export class FileUploader {
 
     // 获取沙箱路径并添加到请求头
     const sandboxPath = this.sandboxManager.getSandboxPath()
+    if (!sandboxPath) {
+      throw new UploadError(
+        'Sandbox path is not configured',
+        'SANDBOX_NOT_CONFIGURED',
+      )
+    }
 
     try {
       // 使用 XMLHttpRequest 以支持进度跟踪
@@ -182,7 +188,7 @@ export class FileUploader {
               fileId: response.fileId || response.id || '',
             })
           }
-          catch (error) {
+          catch {
             reject(new Error('Invalid response format'))
           }
         }

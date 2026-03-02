@@ -3,13 +3,13 @@
  * Reverse Substitution Property-Based Tests
  */
 
-import { describe, it, expect, beforeEach, afterEach } from 'vitest'
+import type { MappingData, MappingEntry, MaskingRule } from '../types'
 import * as fc from 'fast-check'
-import { ReverseSubstitution } from '../reverse-substitution'
+import { v4 as uuidv4 } from 'uuid'
+import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { MappingStore } from '../mapping-store'
 import { MaskingEngine } from '../masking-engine'
-import type { MappingData, MaskingRule, MappingEntry } from '../types'
-import { v4 as uuidv4 } from 'uuid'
+import { ReverseSubstitution } from '../reverse-substitution'
 
 describe('ReverseSubstitution Property Tests', () => {
   let store: MappingStore
@@ -20,7 +20,7 @@ describe('ReverseSubstitution Property Tests', () => {
     store = new MappingStore()
     await store.initialize()
     reverseSubstitution = new ReverseSubstitution(store)
-    maskingEngine = new MaskingEngine(store)
+    maskingEngine = new MaskingEngine()
   })
 
   afterEach(async () => {
@@ -31,9 +31,7 @@ describe('ReverseSubstitution Property Tests', () => {
         await store.deleteMapping(mapping.id)
       }
     }
-    catch (error) {
-      // Ignore errors during cleanup
-    }
+    catch {}
     store.close()
   })
 
@@ -156,7 +154,7 @@ describe('ReverseSubstitution Property Tests', () => {
         async ({ mappingData, response }, unknownMaskedValues) => {
           // Generate new unique ID to avoid conflicts
           const dataWithNewId = { ...mappingData, id: uuidv4() }
-          
+
           const mappingId = await store.storeMapping(dataWithNewId)
 
           // Add some unknown masked values to the response
@@ -175,7 +173,7 @@ describe('ReverseSubstitution Property Tests', () => {
 
           // Verify known masked values that match our patterns were substituted
           const identifiedValues = reverseSubstitution.identifyMaskedValues(response)
-          
+
           // The test passes if:
           // 1. There are no identified values (edge case with patterns not matching), OR
           // 2. All identified values were successfully substituted
@@ -184,7 +182,7 @@ describe('ReverseSubstitution Property Tests', () => {
             // This is acceptable - we can't substitute what we can't identify
             return true
           }
-          
+
           // If we identified values, they should all be substituted
           for (const maskedValue of identifiedValues) {
             expect(result.substituted).toContain(maskedValue)
@@ -306,7 +304,7 @@ function arbitraryMaskingRule(): fc.Arbitrary<MaskingRule> {
  * 生成任意响应格式（包含脱敏值）
  */
 function arbitraryResponseFormat(): fc.Arbitrary<{
-  response: any
+  response: unknown
   entries: MappingEntry[]
 }> {
   return fc.oneof(
@@ -326,7 +324,7 @@ function arbitraryResponseFormat(): fc.Arbitrary<{
           position: 20,
           ruleId: 'rule2',
         },
-      ]),
+      ] as MappingEntry[]),
     }),
     // JSON 对象响应
     fc.record({
@@ -354,7 +352,7 @@ function arbitraryResponseFormat(): fc.Arbitrary<{
           position: 40,
           ruleId: 'rule3',
         },
-      ]),
+      ] as MappingEntry[]),
     }),
     // 嵌套结构响应
     fc.record({
@@ -379,7 +377,7 @@ function arbitraryResponseFormat(): fc.Arbitrary<{
           position: 20,
           ruleId: 'rule2',
         },
-      ]),
+      ] as MappingEntry[]),
     }),
   )
 }
@@ -402,7 +400,7 @@ function arbitraryMappingDataWithResponse(): fc.Arbitrary<{
           fc.constant('***@***.***'),
           fc.constant('XXX-XXX-XXXX'),
           // Generate TOKEN_ values that match our pattern (alphanumeric only, no spaces)
-          fc.string({ minLength: 3, maxLength: 10 }).filter(s => /^[A-Za-z0-9]+$/.test(s)).map(s => `TOKEN_${s}`),
+          fc.string({ minLength: 3, maxLength: 10 }).filter(s => /^[A-Z0-9]+$/i.test(s)).map(s => `TOKEN_${s}`),
         ),
         position: fc.integer({ min: 0, max: 100 }),
         ruleId: fc.uuid(),
@@ -429,7 +427,7 @@ function arbitraryMappingDataWithResponse(): fc.Arbitrary<{
 /**
  * 生成任意嵌套对象
  */
-function arbitraryNestedObject(): fc.Arbitrary<any> {
+function arbitraryNestedObject(): fc.Arbitrary<unknown> {
   return fc.oneof(
     fc.string(),
     fc.integer(),

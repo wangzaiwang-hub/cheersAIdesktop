@@ -2,8 +2,10 @@ import { downloadBlob, downloadUrl } from './download'
 
 describe('downloadUrl', () => {
   let mockAnchor: HTMLAnchorElement
+  let originalCreateElement: typeof document.createElement
 
   beforeEach(() => {
+    originalCreateElement = document.createElement.bind(document)
     mockAnchor = {
       href: '',
       download: '',
@@ -14,7 +16,13 @@ describe('downloadUrl', () => {
       remove: vi.fn(),
     } as unknown as HTMLAnchorElement
 
-    vi.spyOn(document, 'createElement').mockReturnValue(mockAnchor)
+    vi.spyOn(document, 'createElement').mockImplementation(
+      ((tagName: string) => {
+        if (tagName === 'a')
+          return mockAnchor
+        return originalCreateElement(tagName as keyof HTMLElementTagNameMap)
+      }) as unknown as typeof document.createElement,
+    )
     vi.spyOn(document.body, 'appendChild').mockImplementation((node: Node) => node)
   })
 
@@ -57,7 +65,14 @@ describe('downloadBlob', () => {
       remove: vi.fn(),
     } as unknown as HTMLAnchorElement
 
-    vi.spyOn(document, 'createElement').mockReturnValue(mockAnchor)
+    const originalCreateElement = document.createElement.bind(document)
+    vi.spyOn(document, 'createElement').mockImplementation(
+      ((tagName: string) => {
+        if (tagName === 'a')
+          return mockAnchor
+        return originalCreateElement(tagName as keyof HTMLElementTagNameMap)
+      }) as unknown as typeof document.createElement,
+    )
     vi.spyOn(document.body, 'appendChild').mockImplementation((node: Node) => node)
 
     downloadBlob({ data: blob, fileName: 'file.txt' })

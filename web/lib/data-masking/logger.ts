@@ -1,13 +1,13 @@
 /**
  * 操作日志记录器
  * Operation Logger
- * 
+ *
  * 记录数据脱敏操作的日志，确保不包含敏感数据
  */
 
-import { v4 as uuidv4 } from 'uuid'
 import type { MaskingLog } from './types'
-import { getIndexedDB, STORES, addRecord, getAllRecords } from './indexeddb'
+import { v4 as uuidv4 } from 'uuid'
+import { addRecord, getAllRecords, getIndexedDB, STORES } from './indexeddb'
 
 /**
  * 日志记录器类
@@ -37,7 +37,7 @@ export class Logger {
     status: 'success' | 'failure' | 'partial',
     message: string,
     mappingId?: string,
-    details?: any,
+    details?: unknown,
   ): Promise<void> {
     if (!this.db) {
       console.warn('Logger not initialized, skipping log')
@@ -59,7 +59,7 @@ export class Logger {
     }
 
     try {
-      await addRecord(this.db, STORES.LOGS, {
+      await addRecord(this.db, STORES.MASKING_LOGS, {
         id: log.id,
         operation: log.operation,
         file_name: log.fileName,
@@ -83,7 +83,7 @@ export class Logger {
     fileName: string,
     message: string,
     mappingId?: string,
-    details?: any,
+    details?: unknown,
   ): Promise<void> {
     await this.log(operation, fileName, 'success', message, mappingId, details)
   }
@@ -98,11 +98,13 @@ export class Logger {
     error?: Error,
     mappingId?: string,
   ): Promise<void> {
-    const details = error ? {
-      errorName: error.name,
-      errorMessage: error.message,
-      // 不包含堆栈跟踪，因为可能包含敏感路径
-    } : undefined
+    const details = error
+      ? {
+          errorName: error.name,
+          errorMessage: error.message,
+          // 不包含堆栈跟踪，因为可能包含敏感路径
+        }
+      : undefined
 
     await this.log(operation, fileName, 'failure', message, mappingId, details)
   }
@@ -115,7 +117,7 @@ export class Logger {
     fileName: string,
     message: string,
     mappingId?: string,
-    details?: any,
+    details?: unknown,
   ): Promise<void> {
     await this.log(operation, fileName, 'partial', message, mappingId, details)
   }
@@ -131,17 +133,17 @@ export class Logger {
     }
 
     try {
-      const records = await getAllRecords<any>(this.db, STORES.LOGS)
-      
+      const records = await getAllRecords<Record<string, unknown>>(this.db, STORES.MASKING_LOGS)
+
       const logs: MaskingLog[] = records.map(record => ({
-        id: record.id,
-        operation: record.operation,
-        fileName: record.file_name,
-        mappingId: record.mapping_id ?? undefined,
-        status: record.status,
-        message: record.message,
-        timestamp: new Date(record.timestamp),
-        details: record.details ? JSON.parse(record.details) : undefined,
+        id: String(record.id),
+        operation: String(record.operation) as MaskingLog['operation'],
+        fileName: String(record.file_name),
+        mappingId: record.mapping_id ? String(record.mapping_id) : undefined,
+        status: String(record.status) as MaskingLog['status'],
+        message: String(record.message),
+        timestamp: new Date(String(record.timestamp)),
+        details: record.details ? JSON.parse(String(record.details)) : undefined,
       }))
 
       // 按时间戳降序排序
@@ -199,8 +201,8 @@ export class Logger {
     const logsToDelete = allLogs.filter(log => log.timestamp < cutoffDate)
 
     // 删除旧日志
-    const transaction = this.db.transaction([STORES.LOGS], 'readwrite')
-    const store = transaction.objectStore(STORES.LOGS)
+    const transaction = this.db.transaction([STORES.MASKING_LOGS], 'readwrite')
+    const store = transaction.objectStore(STORES.MASKING_LOGS)
 
     for (const log of logsToDelete) {
       store.delete(log.id)
@@ -229,7 +231,7 @@ export class Logger {
    * @param details - 原始详细信息
    * @returns 清理后的详细信息
    */
-  private sanitizeDetails(details: any): any {
+  private sanitizeDetails(details: unknown): unknown {
     if (!details) {
       return null
     }
@@ -241,16 +243,23 @@ export class Logger {
 
     // 如果是对象，递归清理
     if (typeof details === 'object' && details !== null) {
-      const sanitized: any = Array.isArray(details) ? [] : {}
+      const sanitized: unknown[] | Record<string, unknown> = Array.isArray(details) ? [] : {}
 
-      for (const key in details) {
+      for (const key in details as Record<string, unknown>) {
         if (Object.prototype.hasOwnProperty.call(details, key)) {
           // 跳过可能包含敏感数据的字段
           if (this.isSensitiveField(key)) {
-            sanitized[key] = '[REDACTED]'
+            if (Array.isArray(sanitized))
+              sanitized.push('[REDACTED]')
+            else
+              sanitized[key] = '[REDACTED]'
           }
           else {
-            sanitized[key] = this.sanitizeDetails(details[key])
+            const child = this.sanitizeDetails((details as Record<string, unknown>)[key])
+            if (Array.isArray(sanitized))
+              sanitized.push(child)
+            else
+              sanitized[key] = child
           }
         }
       }
@@ -270,13 +279,13 @@ export class Logger {
     // 移除可能的敏感模式
     const patterns = [
       // 电子邮件
-      /[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/g,
+      /[\w.%+-]+@[a-z0-9.-]+\.[a-z]{2,}/gi,
       // 电话号码
       /\b\d{3}[-.]?\d{3}[-.]?\d{4}\b/g,
       // 信用卡号
       /\b\d{4}[-\s]?\d{4}[-\s]?\d{4}[-\s]?\d{4}\b/g,
       // 身份证号
-      /\b\d{17}[\dXx]\b/g,
+      /\b\d{17}[\dX]\b/gi,
     ]
 
     let sanitized = str

@@ -1,9 +1,3 @@
-export const dynamicParams = false
-
-export async function generateStaticParams() {
-  return []
-}
-
 import * as React from 'react'
 import ApikeyInfoPanel from '@/app/components/app/overview/apikey-info-panel'
 import ChartView from './chart-view'

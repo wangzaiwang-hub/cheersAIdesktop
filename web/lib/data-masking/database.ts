@@ -3,7 +3,10 @@
  * Data Masking Database Management
  */
 
-import type { Database } from 'better-sqlite3'
+export type Database = {
+  exec: (sql: string) => unknown
+  close: () => void
+}
 
 /**
  * 数据库初始化 SQL
@@ -92,14 +95,14 @@ export function initDatabase(db: Database): void {
  */
 export async function getDatabase(): Promise<Database> {
   // 检查是否在 Electron 环境
-  if (typeof window !== 'undefined' && (window as any).electron) {
+  if (typeof window !== 'undefined' && (window as unknown as { electron?: unknown }).electron) {
     // Electron 环境：使用 better-sqlite3
-    const Database = (await import('better-sqlite3')).default
-    const path = await import('path')
+    const DatabaseCtor = (await import('better-sqlite3')).default as unknown as new (path: string) => Database
+    const path = await import('node:path')
     const { app } = await import('electron')
 
     const dbPath = path.join(app.getPath('userData'), 'data-masking.db')
-    const db = new Database(dbPath)
+    const db = new DatabaseCtor(dbPath)
 
     // 初始化数据库
     initDatabase(db)

@@ -1,9 +1,3 @@
-export const dynamicParams = false
-
-export async function generateStaticParams() {
-  return []
-}
-
 import WorkflowApp from '@/app/components/workflow-app'
 
 const Page = () => {
