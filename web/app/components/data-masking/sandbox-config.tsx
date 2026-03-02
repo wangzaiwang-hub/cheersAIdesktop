@@ -38,6 +38,7 @@ export function SandboxConfig({ onConfigured }: SandboxConfigProps) {
   const [aiReplyDownloadPath, setAiReplyDownloadPath] = useState("")
   const [aiReplyDownloadPathSaved, setAiReplyDownloadPathSaved] = useState(false)
   const [sensitiveWarning, setSensitiveWarning] = useState(true)
+  const [encryptionEnabled, setEncryptionEnabled] = useState(true)
   const [configLoaded, setConfigLoaded] = useState(false)
 
   useEffect(() => {
@@ -56,6 +57,9 @@ export function SandboxConfig({ onConfigured }: SandboxConfigProps) {
       const warn = remote.sensitive_send_warning
       if (warn !== undefined) { setSensitiveWarning(warn !== "false"); localStorage.setItem("sensitive_send_warning", warn) }
       else { const l = localStorage.getItem("sensitive_send_warning"); if (l !== null) setSensitiveWarning(l !== "false") }
+      const enc = remote.mapping_encryption_enabled
+      if (enc !== undefined) { setEncryptionEnabled(enc !== "false"); localStorage.setItem("mapping_encryption_enabled", enc) }
+      else { const l = localStorage.getItem("mapping_encryption_enabled"); if (l !== null) setEncryptionEnabled(l !== "false"); else setEncryptionEnabled(true) }
       const sec = remote.sandbox_security_enabled
       if (sec !== undefined) { setSecurityEnabled(sec === "true"); localStorage.setItem("sandbox_security_enabled", sec) }
       if (!remote.sandbox_path && path) {
@@ -63,6 +67,7 @@ export function SandboxConfig({ onConfigured }: SandboxConfigProps) {
         if (path) m.sandbox_path = path
         if (aiPath) m.ai_reply_download_path = aiPath
         const lw = localStorage.getItem("sensitive_send_warning"); if (lw !== null) m.sensitive_send_warning = lw
+        const le = localStorage.getItem("mapping_encryption_enabled"); if (le !== null) m.mapping_encryption_enabled = le
         const ls = localStorage.getItem("sandbox_security_enabled"); if (ls !== null) m.sandbox_security_enabled = ls
         const lp = localStorage.getItem("sandbox_export_pin"); if (lp) m.sandbox_export_pin = lp
         if (Object.keys(m).length > 0) saveUserConfig(m)
@@ -127,6 +132,24 @@ export function SandboxConfig({ onConfigured }: SandboxConfigProps) {
         </div>
       </div>
 
+      <div className="rounded-lg border border-divider-regular bg-components-panel-bg p-4">
+        <div className="flex items-center justify-between">
+          <div className="flex-1">
+            <h3 className="text-sm font-medium text-text-primary">映射文件加密</h3>
+            <p className="text-xs text-text-tertiary mt-0.5">导出映射文件时使用32位口令加密保护</p>
+          </div>
+          <button onClick={() => { const n = !encryptionEnabled; setEncryptionEnabled(n); persistSetting("mapping_encryption_enabled", String(n)) }}
+            className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${encryptionEnabled ? "bg-components-button-primary-bg" : "bg-components-input-bg-normal"}`}>
+            <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${encryptionEnabled ? "translate-x-6" : "translate-x-1"}`} />
+          </button>
+        </div>
+        {encryptionEnabled && (
+          <div className="mt-3 rounded-md bg-state-accent-hover border border-state-accent-hover-alt px-3 py-2">
+            <p className="text-xs text-text-accent">✓ 映射文件将使用AES-256-GCM加密，需要口令才能解密还原</p>
+          </div>
+        )}
+      </div>
+
       {currentPath && (
         <div className="rounded-lg border border-divider-regular bg-background-section p-4">
           <div className="flex items-start gap-3">
@@ -177,9 +200,9 @@ export function SandboxConfig({ onConfigured }: SandboxConfigProps) {
         <ul className="space-y-1 text-xs text-text-accent">
           <li>• 配置保存到数据库，刷新或换设备不会丢失</li>
           <li>• 目录不存在时会自动创建</li>
+          <li>• 映射文件加密默认开启，可在此关闭</li>
         </ul>
       </div>
     </div>
   )
 }
-

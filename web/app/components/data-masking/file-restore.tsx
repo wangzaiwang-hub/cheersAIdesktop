@@ -8,8 +8,10 @@ import {
   PlayIcon,
   CheckCircleIcon,
   ArrowPathIcon,
+  ShieldCheckIcon,
 } from '@heroicons/react/24/outline'
 import { saveSandboxFile } from '@/service/sandbox-files'
+import { decrypt } from '@/lib/data-masking/crypto-utils'
 
 interface MappingRule {
   original: string
@@ -54,13 +56,17 @@ function applyRestore(content: string, rules: MappingRule[]): { restored: string
   return { restored, count: totalCount }
 }
 
-type Step = 'upload' | 'confirm' | 'preview' | 'done'
+type Step = 'upload' | 'decrypt' | 'confirm' | 'preview' | 'done'
 
 export function FileRestore({ sandboxPath }: FileRestoreProps) {
   const [step, setStep] = useState<Step>('upload')
   const [maskedFile, setMaskedFile] = useState<File | null>(null)
   const [maskedContent, setMaskedContent] = useState('')
   const [mappingData, setMappingData] = useState<MappingData | null>(null)
+  const [encryptedData, setEncryptedData] = useState<string | null>(null)
+  const [decryptionKey, setDecryptionKey] = useState('')
+  const [showKey, setShowKey] = useState(false)
+  const [decrypting, setDecrypting] = useState(false)
   const [preview, setPreview] = useState('')
   const [restoredContent, setRestoredContent] = useState('')
   const [matchCount, setMatchCount] = useState(0)
@@ -88,15 +94,50 @@ export function FileRestore({ sandboxPath }: FileRestoreProps) {
       return
     }
     const reader = new FileReader()
-    reader.onload = (ev) => {
+    reader.onload = async (ev) => {
       try {
-        const data = JSON.parse(ev.target?.result as string) as MappingData
-        if (!data.rules || !Array.isArray(data.rules)) {
-          setError('映射文件格式错误：缺少 rules 字段')
-          return
+        const rawData = JSON.parse(ev.target?.result as string)
+        
+        // Check if encrypted
+        if (rawData.encrypted && rawData.data) {
+          // Encrypted mapping file - try global passphrase first
+          const globalPassphrase = localStorage.getItem('mapping_encryption_passphrase')
+          if (globalPassphrase && globalPassphrase.length >= 32) {
+            // Try to decrypt with global passphrase
+            try {
+              const decryptedJson = await decrypt(rawData.data, globalPassphrase)
+              const data = JSON.parse(decryptedJson) as MappingData
+              
+              if (!data.rules || !Array.isArray(data.rules)) {
+                setError('解密后的数据格式错误：缺少 rules 字段')
+                return
+              }
+              
+              setMappingData(data)
+              setEncryptedData(null)
+              setStep('confirm')
+              return
+            }
+            catch {
+              // Global passphrase failed, prompt user
+              setEncryptedData(rawData.data)
+              setMappingData(null)
+              setStep('decrypt')
+            }
+          } else {
+            // No global passphrase, prompt user
+            setEncryptedData(rawData.data)
+            setMappingData(null)
+            setStep('decrypt')
+          }
+        } else if (rawData.rules && Array.isArray(rawData.rules)) {
+          // Unencrypted mapping file (legacy)
+          setEncryptedData(null)
+          setMappingData(rawData as MappingData)
+          setStep('confirm')
+        } else {
+          setError('映射文件格式错误：缺少必要字段')
         }
-        setMappingData(data)
-        setStep('confirm')
       }
       catch {
         setError('映射文件解析失败，请确认是有效的 JSON 文件')
@@ -118,6 +159,36 @@ export function FileRestore({ sandboxPath }: FileRestoreProps) {
         handleMaskedFile(f)
     }
   }, [handleMaskedFile, handleMappingFile])
+
+  const handleDecrypt = async () => {
+    if (!encryptedData || !decryptionKey) {
+      setError('请输入解密口令')
+      return
+    }
+    
+    setDecrypting(true)
+    setError('')
+    
+    try {
+      const decryptedJson = await decrypt(encryptedData, decryptionKey)
+      const data = JSON.parse(decryptedJson) as MappingData
+      
+      if (!data.rules || !Array.isArray(data.rules)) {
+        setError('解密后的数据格式错误：缺少 rules 字段')
+        setDecrypting(false)
+        return
+      }
+      
+      setMappingData(data)
+      setStep('confirm')
+    }
+    catch (err) {
+      setError(`解密失败: ${err instanceof Error ? err.message : '口令错误或数据损坏'}`)
+    }
+    finally {
+      setDecrypting(false)
+    }
+  }
 
   const handlePreview = () => {
     if (!maskedContent || !mappingData) return
@@ -170,6 +241,10 @@ export function FileRestore({ sandboxPath }: FileRestoreProps) {
     setMaskedFile(null)
     setMaskedContent('')
     setMappingData(null)
+    setEncryptedData(null)
+    setDecryptionKey('')
+    setShowKey(false)
+    setDecrypting(false)
     setPreview('')
     setRestoredContent('')
     setMatchCount(0)
@@ -296,6 +371,74 @@ export function FileRestore({ sandboxPath }: FileRestoreProps) {
             </div>
           )}
         </>
+      )}
+
+      {/* Decrypt step */}
+      {step === 'decrypt' && encryptedData && (
+        <div className="bg-components-panel-bg rounded-xl border border-divider-regular p-6">
+          <div className="flex items-center gap-2 mb-4">
+            <ShieldCheckIcon className="h-5 w-5 text-text-warning" />
+            <h3 className="text-base font-medium text-text-primary">输入解密口令</h3>
+          </div>
+          <p className="text-sm text-text-tertiary mb-6">
+            该映射文件已加密。全局口令解密失败或未配置，请手动输入创建时设置的加密口令。
+          </p>
+
+          <div className="space-y-4">
+            <div className="flex items-center gap-2">
+              <input
+                type={showKey ? 'text' : 'password'}
+                value={decryptionKey}
+                onChange={(e) => setDecryptionKey(e.target.value)}
+                placeholder="请输入32位加密口令"
+                className="flex-1 text-sm border border-divider-regular bg-components-input-bg-normal rounded px-3 py-2 text-text-primary focus:ring-1 focus:ring-state-accent-solid focus:border-state-accent-solid"
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' && decryptionKey.length >= 32) {
+                    handleDecrypt()
+                  }
+                }}
+              />
+              <button
+                type="button"
+                onClick={() => setShowKey(!showKey)}
+                className="px-3 py-2 text-sm text-text-accent hover:underline"
+              >
+                {showKey ? '隐藏' : '显示'}
+              </button>
+            </div>
+            {decryptionKey.length > 0 && decryptionKey.length < 32 && (
+              <p className="text-xs text-text-warning">
+                口令长度不足，需要至少32位字符
+              </p>
+            )}
+          </div>
+
+          <div className="flex gap-3 mt-6 pt-4 border-t border-divider-regular">
+            <button
+              type="button"
+              onClick={handleDecrypt}
+              disabled={!decryptionKey || decryptionKey.length < 32 || decrypting}
+              className="inline-flex items-center gap-2 rounded-lg bg-components-button-primary-bg px-5 py-2.5 text-sm font-medium text-components-button-primary-text hover:bg-components-button-primary-bg-hover disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              {decrypting ? (
+                <>
+                  <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+                  解密中...
+                </>
+              ) : (
+                '解密并继续'
+              )}
+            </button>
+            <button
+              type="button"
+              onClick={handleReset}
+              disabled={decrypting}
+              className="inline-flex items-center gap-2 rounded-lg border border-components-button-secondary-border bg-components-button-secondary-bg px-4 py-2.5 text-sm font-medium text-components-button-secondary-text hover:bg-components-button-secondary-bg-hover disabled:opacity-50"
+            >
+              重新选择文件
+            </button>
+          </div>
+        </div>
       )}
 
       {/* Confirm rules */}

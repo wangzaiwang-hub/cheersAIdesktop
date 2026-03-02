@@ -10,6 +10,7 @@ web/lib/data-masking/
 ├── types.ts                     # 核心类型定义
 ├── database.ts                  # SQLite 数据库管理（Electron/Tauri）
 ├── indexeddb.ts                 # IndexedDB 实现（浏览器）
+├── crypto-utils.ts              # 加密工具（AES-256-GCM）
 ├── masking-engine.ts            # 脱敏引擎
 ├── mapping-store.ts             # 映射存储
 ├── sandbox-manager.ts           # 沙箱管理器
@@ -18,6 +19,8 @@ web/lib/data-masking/
 ├── error-handler.ts             # 错误处理
 ├── logger.ts                    # 日志记录
 └── __tests__/                   # 测试文件
+    ├── crypto-utils.test.ts
+    ├── encryption-integration.test.ts
     ├── masking-engine.test.ts
     ├── masking-engine.property.test.ts
     ├── mapping-store.test.ts
@@ -82,9 +85,39 @@ web/lib/data-masking/
 ## 🔐 安全特性
 
 1. **加密存储**: 原始敏感值使用 AES-256-GCM 加密
-2. **密钥管理**: 使用操作系统凭据管理系统
-3. **沙箱隔离**: 强制文件操作在沙箱内
-4. **日志安全**: 日志不包含原始敏感数据
+2. **映射文件加密**: 导出的映射文件使用32位加密口令保护
+3. **密钥管理**: 
+   - 系统自动生成32位随机口令（推荐）
+   - 支持用户自定义口令（最少32位）
+   - 口令默认隐藏，需要时可显示
+4. **沙箱隔离**: 强制文件操作在沙箱内
+5. **日志安全**: 日志不包含原始敏感数据
+
+### 映射文件加密流程
+
+**导出时**:
+1. 用户完成文件脱敏后，系统提示设置加密口令
+2. 可选择系统生成或自定义32位口令
+3. 映射文件使用AES-256-GCM加密后保存
+4. 加密后的文件格式：
+```json
+{
+  "version": "1.0",
+  "encrypted": true,
+  "data": "<base64-encoded-encrypted-data>"
+}
+```
+
+**还原时**:
+1. 上传加密的映射文件
+2. 系统检测到加密标记，提示输入口令
+3. 使用口令解密映射数据
+4. 继续正常的反脱敏流程
+
+**注意事项**:
+- ⚠️ 加密口令无法恢复，请务必妥善保管
+- 口令丢失后无法解密映射文件，原始数据将永久无法恢复
+- 建议使用系统生成的随机口令以确保安全性
 
 ## 🧪 测试策略
 
@@ -109,12 +142,13 @@ pnpm test:coverage
 
 ## 📝 使用示例
 
-### 脱敏文件
+### 脱敏文件（带加密导出）
 
 ```typescript
 import { MaskingEngine } from '@/lib/data-masking/masking-engine'
 import { MappingStore } from '@/lib/data-masking/mapping-store'
 import { SandboxManager } from '@/lib/data-masking/sandbox-manager'
+import { encrypt, generateKey } from '@/lib/data-masking/crypto-utils'
 
 // 1. 配置沙箱
 const sandbox = new SandboxManager()
@@ -139,38 +173,81 @@ const result = await engine.maskContent(fileContent, rules)
 // 4. 保存脱敏文件
 await sandbox.saveFile('masked-file.txt', result.maskedContent)
 
-// 5. 存储映射
-const store = new MappingStore()
-await store.storeMapping({
-  id: result.mappingId,
-  fileName: 'file.txt',
-  entries: result.entries,
-  createdAt: new Date(),
-  fileHash: hash(fileContent),
-})
+// 5. 生成加密口令并加密映射数据
+const encryptionKey = generateKey(16) // 生成32位十六进制字符串
+const mappingData = {
+  version: '1.0',
+  source_file: 'file.txt',
+  masked_file: 'masked-file.txt',
+  created_at: new Date().toISOString(),
+  total_replacements: result.matchCount,
+  rules: result.entries.map(e => ({
+    original: e.originalValue,
+    replacement: e.maskedValue,
+    label: e.ruleId,
+    type: 'entity',
+    count: '1',
+  })),
+}
+
+const mappingJson = JSON.stringify(mappingData, null, 2)
+const encryptedData = await encrypt(mappingJson, encryptionKey)
+
+// 6. 保存加密的映射文件
+const encryptedMappingFile = {
+  version: '1.0',
+  encrypted: true,
+  data: encryptedData,
+}
+await sandbox.saveFile(
+  'file.mapping.json',
+  JSON.stringify(encryptedMappingFile, null, 2)
+)
+
+// ⚠️ 重要：向用户显示加密口令，提醒保存
+console.log('加密口令（请妥善保管）:', encryptionKey)
 ```
 
-### 反向替换
+### 反向替换（带解密）
 
 ```typescript
 import { ReverseSubstitution } from '@/lib/data-masking/reverse-substitution'
-import { MappingStore } from '@/lib/data-masking/mapping-store'
+import { decrypt } from '@/lib/data-masking/crypto-utils'
 
-// 1. 接收 Dify 后端响应
-const response = await difyAPI.process(maskedFile)
-
-// 2. 执行反向替换
-const reverseSubstitution = new ReverseSubstitution()
-const store = new MappingStore()
-
-const result = await reverseSubstitution.substitute(
-  response,
-  mappingId,
-  store,
+// 1. 读取加密的映射文件
+const encryptedMappingFile = JSON.parse(
+  await sandbox.readFile('file.mapping.json')
 )
 
-// 3. 显示恢复后的结果
-console.log(result.response) // 原始敏感数据已恢复
+// 2. 检查是否加密
+if (encryptedMappingFile.encrypted) {
+  // 3. 提示用户输入口令
+  const userPassphrase = await promptForPassphrase()
+  
+  // 4. 解密映射数据
+  try {
+    const decryptedJson = await decrypt(
+      encryptedMappingFile.data,
+      userPassphrase
+    )
+    const mappingData = JSON.parse(decryptedJson)
+    
+    // 5. 使用解密后的映射数据进行反向替换
+    const reverseSubstitution = new ReverseSubstitution()
+    const result = await reverseSubstitution.substituteWithRules(
+      response,
+      mappingData.rules
+    )
+    
+    console.log(result.response) // 原始敏感数据已恢复
+  } catch (error) {
+    console.error('解密失败：口令错误或数据损坏')
+  }
+} else {
+  // 未加密的映射文件（向后兼容）
+  const mappingData = encryptedMappingFile
+  // ... 继续正常流程
+}
 ```
 
 ## 🔗 相关文档
